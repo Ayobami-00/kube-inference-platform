@@ -7,10 +7,10 @@ distributed execution, routing, autoscaling, SLO management, observability, and 
 optimisation.
 
 > [!IMPORTANT]
-> The repository currently contains the v0.1 foundation and portable host-preparation
-> tooling. The host tooling is tested with deterministic fixtures but has not yet been
-> validated on target hardware. Kubernetes manifests, GPU integration, vLLM serving,
-> observability, and real benchmark traffic are not yet implemented or validated.
+> The repository currently contains the v0.1 foundation, portable host preparation, and
+> single-node Kubernetes bootstrap tooling. These layers are tested with deterministic
+> fixtures but have not yet been validated on target hardware. GPU integration, vLLM
+> serving, observability, and real benchmark traffic are not yet implemented or validated.
 
 ## v0.1 objective
 
@@ -46,7 +46,7 @@ flow.
 ├── deploy/                 Host, cluster, GPU, runtime, and observability assets
 ├── docs/                   Architecture documentation
 ├── experiments/baseline/   Reproducible baseline experiment record
-├── tests/                  Benchmark tests
+├── tests/                  Benchmark and deployment-tooling tests
 ├── Makefile                Local development commands
 └── pyproject.toml          Python project and tool configuration
 ```
@@ -133,13 +133,82 @@ to the terminal and are never persisted automatically.
 The later multi-node milestone will add inventory-driven remote orchestration while reusing
 these same target-local scripts.
 
+## Single-node Kubernetes bootstrap
+
+After host preparation, bootstrap Kubernetes directly on the target:
+
+```bash
+make cluster-bootstrap
+```
+
+The v0.1 cluster is pinned to Kubernetes 1.36.4, containerd 2.3.4, Cilium 1.20.1,
+Cilium CLI 0.19.7, and Helm 3.21.4. The node runs both the control-plane and worker roles;
+kube-proxy remains enabled, and Cilium uses Kubernetes PodCIDR IPAM with an IPv4 VXLAN
+overlay. Hubble remains deferred to the observability milestone.
+
+The default network ranges are:
+
+```text
+Pod CIDR:      10.244.0.0/16
+Service CIDR:  10.96.0.0/12
+DNS domain:    cluster.local
+```
+
+The bootstrap derives the node IPv4 address from a single default route. Specify it when the
+host has multiple default routes, and override network ranges when they conflict with target
+host or provider routes:
+
+```bash
+make cluster-bootstrap NODE_IP=192.0.2.10
+make cluster-bootstrap POD_CIDR=172.20.0.0/16 SERVICE_CIDR=172.21.0.0/16
+```
+
+The command makes the following persistent host changes:
+
+- Installs only the pinned container runtime and Kubernetes tooling, plus verified Helm and
+  Cilium CLI binaries. It never performs a package upgrade or installs Docker Engine.
+- Loads `overlay` and `br_netfilter`, enables bridge packet filtering and IPv4 forwarding,
+  and writes project-owned files under `/etc/modules-load.d` and `/etc/sysctl.d`.
+- Disables swap and creates `/etc/fstab.kip-pre-bootstrap` before marking swap entries in
+  `/etc/fstab`. Swap managed outside that file is rejected instead of changed blindly.
+- Writes the containerd and `crictl` configuration, initializes kubeadm, installs Cilium,
+  and copies the administrative kubeconfig to the invoking user's `~/.kube/config` with
+  restrictive permissions.
+
+Between `kubeadm init` and Cilium installation, a `NotReady` node and pending CoreDNS pods are
+expected transitional states. Completion is reported only after containerd, kubelet, the API
+readiness endpoint, all control-plane components, kube-proxy, Cilium, CoreDNS, DNS resolution,
+Service routing, and Cilium connectivity pass.
+
+Re-running the command reconciles a healthy matching cluster and reruns smoke tests. It stops
+on partial kubeadm state, version drift, changed immutable CIDRs, or an unrelated existing
+runtime. It never runs `kubeadm reset` or deletes etcd data automatically.
+
+Run read-only validation at any time:
+
+```bash
+make cluster-check
+make cluster-check VERBOSE=1
+```
+
+The validator reads current services and cluster resources but creates no pods and writes no
+report. The mutating DNS, Service, and Cilium connectivity smoke tests run only during
+`cluster-bootstrap`.
+
+Normal administration remains inside the SSH session on the target. The bootstrap does not
+disable the host firewall or open NodePort ranges. If remote API access is enabled, restrict
+TCP 6443 to trusted administrator addresses in both the provider and host firewalls. Treat
+`~/.kube/config` and `/etc/kubernetes/admin.conf` as administrative credentials and never
+commit or print them.
+
 ## v0.1 implementation milestones
 
 - [x] Create the repository foundation and runnable benchmark skeleton.
 - [x] Implement portable host preparation and validation tooling.
-- [ ] Implement single-node Kubernetes bootstrap and CNI installation.
+- [x] Implement single-node Kubernetes bootstrap and CNI installation tooling.
+- [ ] Bootstrap and validate the single-node cluster on target hardware.
 - [ ] Implement NVIDIA GPU Operator installation and CUDA validation.
-- [ ] Provision the target host and validate the host, cluster, and GPU slices.
+- [ ] Provision the target host and validate the host and GPU slices.
 - [ ] Deploy one vLLM model replica and expose it through a Kubernetes Service.
 - [ ] Verify non-streaming and streaming OpenAI-compatible requests.
 - [ ] Implement the asynchronous benchmark client and inference metrics.

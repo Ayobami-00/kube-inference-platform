@@ -1,6 +1,6 @@
 # v0.1 Architecture
 
-Status: **Host preparation implemented locally; serving path not yet validated on a GPU cluster**
+Status: **Host and single-node cluster tooling implemented locally; not yet validated on target hardware**
 
 The v0.1 milestone proves the smallest complete serving path on one SSH-accessible bare-metal NVIDIA GPU
 server. The platform composes Kubernetes, NVIDIA's Kubernetes integration, and vLLM rather than
@@ -10,6 +10,23 @@ Before cluster bootstrap, `make host-setup` validates the supported Ubuntu/x86-6
 installs only the tools required to inspect the machine. It does not install Kubernetes or
 NVIDIA software. The same target-local entry point will later be reused by multi-node remote
 orchestration.
+
+The cluster bootstrap installs a pinned containerd runtime and creates one kubeadm node that
+serves as both control plane and worker. kube-proxy provides the initial Kubernetes Service
+implementation, while Cilium provides IPv4 pod networking through Kubernetes PodCIDR IPAM and
+a VXLAN overlay. This conservative baseline keeps kube-proxy replacement, Hubble, multi-node
+routing, and high availability as later measured changes rather than initial variables.
+
+Bootstrap treats the following as one ordered dependency chain:
+
+```mermaid
+flowchart LR
+    Host[Validated Ubuntu host] --> Runtime[containerd with systemd cgroups]
+    Runtime --> ControlPlane[kubeadm control plane]
+    ControlPlane --> CNI[Cilium CNI]
+    CNI --> Ready[Ready and schedulable node]
+    Ready --> GPUOperator[NVIDIA GPU Operator - planned]
+```
 
 ```mermaid
 flowchart LR

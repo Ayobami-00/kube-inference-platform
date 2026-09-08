@@ -1,0 +1,30 @@
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "__NODE_IP__"
+  bindPort: 6443
+nodeRegistration:
+  name: "__NODE_NAME__"
+  criSocket: "__CRI_SOCKET__"
+  kubeletExtraArgs:
+    - name: node-ip
+      value: "__NODE_IP__"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: kube-inference
+kubernetesVersion: "v__KUBERNETES_VERSION__"
+imageRepository: registry.k8s.io
+apiServer:
+  certSANs:
+    - "__NODE_NAME__"
+    - "__NODE_IP__"
+networking:
+  dnsDomain: "__DNS_DOMAIN__"
+  podSubnet: "__POD_CIDR__"
+  serviceSubnet: "__SERVICE_CIDR__"
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+failSwapOn: true

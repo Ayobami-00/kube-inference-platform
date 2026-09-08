@@ -1,0 +1,22 @@
+# Conservative v0.1 baseline: kube-proxy remains responsible for Service translation.
+kubeProxyReplacement: false
+
+ipam:
+  mode: kubernetes
+
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+ipv4:
+  enabled: true
+ipv6:
+  enabled: false
+
+operator:
+  replicas: 1
+
+hubble:
+  enabled: false
+
+cni:
+  exclusive: true

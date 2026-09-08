@@ -1,12 +1,12 @@
 # Deployment Assets
 
-This directory will contain the declarative assets required for the v0.1 vertical slice.
+This directory contains the declarative assets required for the v0.1 vertical slice.
 Operational commands and their verified order remain in the repository's root `README.md`.
 
 | Directory | Responsibility | Completion gate |
 | --- | --- | --- |
 | `host/` | Provider-neutral host preparation and validation | Required host checks pass |
-| `cluster/` | containerd, kubeadm, and CNI configuration | The Kubernetes node is `Ready` |
+| `cluster/` | Pinned containerd, kubeadm, and Cilium bootstrap | The node and all core system pods are healthy |
 | `gpu/` | NVIDIA GPU Operator values and CUDA validation | A Pod can consume `nvidia.com/gpu` |
 | `runtime/` | The initial vLLM Deployment and Service | Streaming inference returns tokens |
 | `observability/` | Prometheus, Grafana, and DCGM integration | Runtime and GPU metrics are queryable |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Shared terminal output for target-host setup and validation.
+# Shared terminal output for deployment setup and validation stages.
 
 KIP_COLOR_ENABLED=0
 KIP_COLOR_RESET=""
@@ -37,8 +37,8 @@ kip_logo() {
     fi
 
     printf '%s' "$KIP_COLOR_CYAN"
-    if [ -r "$KIP_HOST_ROOT/assets/logo.txt" ]; then
-        command cat "$KIP_HOST_ROOT/assets/logo.txt"
+    if [ -r "$KIP_DEPLOY_ROOT/assets/logo.txt" ]; then
+        command cat "$KIP_DEPLOY_ROOT/assets/logo.txt"
     else
         printf '%s\n' "KUBE INFERENCE PLATFORM"
     fi
@@ -115,7 +115,7 @@ kip_verbose_output() {
 }
 
 kip_summary() {
-    local stage=${1:-Host validation}
+    local stage=${1:-Validation}
 
     printf '\n%s completed: ' "$stage"
     printf '%s%d passed%s, ' "$KIP_COLOR_GREEN" "$KIP_PASSED" "$KIP_COLOR_RESET"

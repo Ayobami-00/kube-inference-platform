@@ -6,9 +6,11 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 KIP_HOST_ROOT=$SCRIPT_DIR
 readonly KIP_HOST_ROOT
+KIP_DEPLOY_ROOT=$(cd "$KIP_HOST_ROOT/.." && pwd)
+readonly KIP_DEPLOY_ROOT
 
-# shellcheck source=deploy/host/lib/ui.sh
-source "$KIP_HOST_ROOT/lib/ui.sh"
+# shellcheck source=deploy/lib/ui.sh
+source "$KIP_DEPLOY_ROOT/lib/ui.sh"
 # shellcheck source=deploy/host/lib/checks.sh
 source "$KIP_HOST_ROOT/lib/checks.sh"
 
