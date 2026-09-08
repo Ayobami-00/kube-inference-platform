@@ -1,10 +1,15 @@
 # v0.1 Architecture
 
-Status: **Planned; not yet validated on a GPU cluster**
+Status: **Host preparation implemented locally; serving path not yet validated on a GPU cluster**
 
 The v0.1 milestone proves the smallest complete serving path on one SSH-accessible bare-metal NVIDIA GPU
 server. The platform composes Kubernetes, NVIDIA's Kubernetes integration, and vLLM rather than
 replacing them.
+
+Before cluster bootstrap, `make host-setup` validates the supported Ubuntu/x86-64 contract and
+installs only the tools required to inspect the machine. It does not install Kubernetes or
+NVIDIA software. The same target-local entry point will later be reused by multi-node remote
+orchestration.
 
 ```mermaid
 flowchart LR
