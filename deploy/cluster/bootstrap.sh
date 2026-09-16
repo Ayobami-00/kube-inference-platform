@@ -104,7 +104,7 @@ readonly cluster_state
 preflight_error=""
 if ! kip_dns_and_time_ready; then
     preflight_error="DNS resolution and synchronized system time are required."
-elif ! kip_networks_valid; then
+elif ! kip_networks_valid "$cluster_state"; then
     preflight_error="Pod and Service CIDRs conflict with a host address or route."
 elif ! kip_swap_is_supported; then
     preflight_error="Active swap is not represented safely in /etc/fstab."

@@ -59,7 +59,8 @@ kip_initialize_kubernetes() {
     kip_exec kubeadm config validate --config "$config"
     images=$(kip_exec kubeadm config images list --config "$config") || return 1
     kip_verbose_output "kubeadm control-plane images" "$images"
-    output=$(kip_exec kubeadm config images pull --config "$config" 2>&1) || return 1
+    output=$(kip_run_privileged kubeadm config images pull --config "$config" 2>&1) \
+        || return 1
     kip_verbose_output "kubeadm image pre-pull" "$output"
     kip_run_privileged kubeadm init --config "$config"
 }

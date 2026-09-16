@@ -93,6 +93,14 @@ From a repository checkout on the host, run:
 make host-setup
 ```
 
+On a minimal image where `make` is not installed yet, invoke the underlying setup once; it
+installs `make` along with the inspection prerequisites, after which the public Make targets
+are available:
+
+```bash
+./deploy/host/setup.sh
+```
+
 The setup command installs only missing inspection prerequisites and then validates the host.
 It supports root execution or a non-root user with `sudo`, and it is safe to repeat. It does
 not install or configure containerd, Kubernetes, NVIDIA software, swap, kernel modules,
@@ -221,6 +229,12 @@ machine with a provider-installed driver must opt into the alternate mode, and i
 make host-check GPU_REQUIRED=1
 make gpu-install GPU_DRIVER_MODE=preinstalled
 ```
+
+Operator-managed mode also requires the exact running-kernel header package to remain
+downloadable from the configured Ubuntu repositories. This is stricter than merely having
+headers installed on the host because the driver container resolves its own build packages.
+If an image boots an obsolete kernel whose headers have left the repositories, update the
+kernel and reboot the target before running `make gpu-install`; the tooling never reboots it.
 
 The v0.1 stack pins GPU Operator v26.7.0 and driver 595.91.07. Before Helm runs, the installer
 downloads Cosign into a temporary directory, checks its pinned checksum, confirms that the

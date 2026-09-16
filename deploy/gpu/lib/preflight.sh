@@ -44,11 +44,19 @@ kip_gpu_driver_mode_preflight() {
     case "$KIP_GPU_DRIVER_MODE" in
         operator)
             if [ "$state" = fresh ] && kip_gpu_host_driver_healthy; then
+                KIP_GPU_PREFLIGHT_ERROR="A working unmanaged host driver conflicts with operator mode."
+                return 1
+            fi
+            if ! kip_gpu_running_kernel_headers_available; then
+                KIP_GPU_PREFLIGHT_ERROR="The running kernel headers are not available from the configured Ubuntu repositories; update and reboot the host first."
                 return 1
             fi
             ;;
         preinstalled)
-            kip_gpu_host_driver_healthy || return 1
+            if ! kip_gpu_host_driver_healthy; then
+                KIP_GPU_PREFLIGHT_ERROR="Preinstalled mode requires healthy host nvidia-smi and topology output."
+                return 1
+            fi
             ;;
     esac
 }

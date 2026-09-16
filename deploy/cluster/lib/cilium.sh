@@ -2,6 +2,10 @@
 
 # Cilium installation and mutating post-install smoke validation.
 
+kip_cilium_cli() {
+    COLUMNS=120 kip_exec cilium "$@"
+}
+
 kip_install_cilium() {
     kip_exec helm upgrade --install cilium \
         "oci://quay.io/cilium/charts/cilium@$KIP_CILIUM_CHART_DIGEST" \
@@ -12,7 +16,7 @@ kip_install_cilium() {
     kip_kubectl -n kube-system rollout status daemonset/cilium --timeout=10m >/dev/null
     kip_kubectl -n kube-system rollout status deployment/cilium-operator --timeout=10m \
         >/dev/null
-    kip_exec cilium status --wait --wait-duration 10m
+    kip_cilium_cli status --wait --wait-duration 10m
 }
 
 kip_run_dns_service_smoke() {
@@ -40,5 +44,18 @@ kip_run_dns_service_smoke() {
 }
 
 kip_run_cilium_connectivity() {
-    kip_exec cilium connectivity test --test-concurrency 1 --timeout 10m --cleanup
+    local result=0
+
+    if ! kip_cilium_cli connectivity test \
+        --single-node \
+        --ip-families ipv4 \
+        --hubble=false \
+        --test-concurrency 1 \
+        --timeout 10m; then
+        result=1
+    fi
+    if ! kip_cilium_cli connectivity test --cleanup; then
+        result=1
+    fi
+    return "$result"
 }

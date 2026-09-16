@@ -78,7 +78,7 @@ if gpu_state=$(kip_gpu_preflight_state) \
         "$gpu_state installation; $KIP_GPU_DRIVER_MODE driver mode; whole GPUs only."
 else
     kip_record FAIL "Safe installation state" \
-        "Conflicting, unmanaged, partitioned, shared, or driver-drift state detected."
+        "${KIP_GPU_PREFLIGHT_ERROR:-Conflicting, unmanaged, partitioned, shared, or driver-drift state detected.}"
     kip_summary "GPU installation"
     exit 1
 fi
@@ -102,8 +102,9 @@ else
     exit 1
 fi
 
-if KIP_NO_LOGO=1 KIP_GPU_DRIVER_MODE="$KIP_GPU_DRIVER_MODE" \
-    "$KIP_GPU_ROOT/validate.sh" >/dev/null; then
+if kip_gpu_wait_until_ready \
+    && KIP_NO_LOGO=1 KIP_GPU_DRIVER_MODE="$KIP_GPU_DRIVER_MODE" \
+        "$KIP_GPU_ROOT/validate.sh" >/dev/null; then
     kip_gpu_capacity_matches_hardware
     kip_record PASS "Kubernetes GPU resources" \
         "$KIP_GPU_NODE_NAME exposes $KIP_PHYSICAL_GPU_COUNT whole nvidia.com/gpu resource(s)."

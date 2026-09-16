@@ -18,7 +18,7 @@ export LC_ALL=C
 KIP_VERBOSE=${KIP_VERBOSE:-0}
 KIP_GPU_REQUIRED=${KIP_GPU_REQUIRED:-0}
 KIP_OS_RELEASE_FILE=${KIP_OS_RELEASE_FILE:-/etc/os-release}
-KIP_REQUIRED_PACKAGES=(ca-certificates curl gpg jq pciutils procps iproute2 util-linux)
+KIP_REQUIRED_PACKAGES=(ca-certificates curl gpg jq make pciutils procps iproute2 util-linux)
 KIP_USE_SUDO=0
 
 kip_ui_init
@@ -47,6 +47,9 @@ elif ! kip_has_command sudo; then
     kip_record FAIL "Administrative access" "sudo is required for a non-root user."
     kip_summary "Host preparation"
     exit 1
+elif kip_exec sudo -n true >/dev/null 2>&1; then
+    KIP_USE_SUDO=1
+    kip_record PASS "Administrative access" "Passwordless sudo is available"
 elif kip_exec sudo -v; then
     KIP_USE_SUDO=1
     kip_record PASS "Administrative access" "sudo credentials acquired"

@@ -42,6 +42,13 @@ def gpu_fixture(tmp_path: Path) -> dict[str, Path]:
     jq_path = shutil.which("jq")
     assert jq_path is not None
     write_command(command_dir, "jq", f'exec "{jq_path}" "$@"')
+    write_command(command_dir, "uname", "printf '%s\\n' '6.8.0-test-generic'")
+    write_command(
+        command_dir,
+        "apt-cache",
+        """[ "${KIP_TEST_KERNEL_HEADERS_UNAVAILABLE:-0}" != 1 ] || exit 0
+printf '%s\\n' 'linux-headers-6.8.0-test-generic | 6.8.0-test | fixture'""",
+    )
     write_command(
         command_dir,
         "lspci",
@@ -97,18 +104,19 @@ case "${1:-}" in
         ;;
     list)
         if [ -e "$KIP_TEST_RELEASE_STATE" ]; then
-            printf '%s\\n' '[{"name":"gpu-operator","namespace":"gpu-operator"}]'
+            printf '%s' '[{"name":"gpu-operator","namespace":"gpu-operator",'
+            printf '"chart":"gpu-operator-%s"}]\\n' \
+                "${KIP_TEST_RELEASE_VERSION:-v26.7.0}"
         elif [ "${KIP_TEST_UNMANAGED_RELEASE:-0}" = 1 ]; then
-            printf '%s\\n' '[{"name":"gpu-operator","namespace":"other"}]'
+            printf '%s' '[{"name":"gpu-operator","namespace":"other",'
+            printf '%s\\n' '"chart":"gpu-operator-v26.7.0"}]'
         else
             printf '%s\\n' '[]'
         fi
         ;;
     status)
         [ -e "$KIP_TEST_RELEASE_STATE" ] || exit 1
-        printf '{"info":{"status":"%s"},"chart":{"metadata":{"version":"%s"}}}\\n' \
-            "${KIP_TEST_RELEASE_STATUS:-deployed}" \
-            "${KIP_TEST_RELEASE_VERSION:-v26.7.0}"
+        printf '{"info":{"status":"%s"}}\\n' "${KIP_TEST_RELEASE_STATUS:-deployed}"
         ;;
     get)
         [ -e "$KIP_TEST_RELEASE_STATE" ] || exit 1
@@ -397,6 +405,20 @@ def test_operator_mode_rejects_working_host_driver_on_fresh_install(
     assert "helm upgrade" not in gpu_fixture["command_log"].read_text()
 
 
+def test_operator_mode_rejects_undownloadable_running_kernel_headers(
+    gpu_fixture: dict[str, Path],
+) -> None:
+    result = run_gpu_script(
+        INSTALL_SCRIPT,
+        gpu_fixture,
+        KIP_TEST_KERNEL_HEADERS_UNAVAILABLE="1",
+    )
+
+    assert result.returncode == 1
+    assert "running kernel headers are not available" in result.stdout
+    assert "helm upgrade" not in gpu_fixture["command_log"].read_text()
+
+
 def test_preinstalled_mode_rejects_unhealthy_host_driver(gpu_fixture: dict[str, Path]) -> None:
     result = run_gpu_script(
         INSTALL_SCRIPT,
@@ -487,6 +509,21 @@ def test_helm_failure_keeps_diagnostics_available_without_atomic_rollback(
     commands = gpu_fixture["command_log"].read_text()
     assert "helm upgrade --install" in commands
     assert "--atomic" not in commands
+
+
+def test_gpu_install_wait_timeout_blocks_hard_checkpoint(
+    gpu_fixture: dict[str, Path],
+) -> None:
+    result = run_gpu_script(
+        INSTALL_SCRIPT,
+        gpu_fixture,
+        KIP_TEST_CLUSTER_POLICY_STATE="notReady",
+        KIP_GPU_WAIT_TIMEOUT_SECONDS="0",
+    )
+
+    assert result.returncode == 1
+    assert "Kubernetes GPU resources" in result.stdout
+    assert "CUDA smoke Pod" not in result.stdout
 
 
 def test_gpu_check_is_read_only_and_accepts_completed_validator(

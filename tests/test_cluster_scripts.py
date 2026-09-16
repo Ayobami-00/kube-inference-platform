@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).parents[1]
 BOOTSTRAP_SCRIPT = ROOT / "deploy" / "cluster" / "bootstrap.sh"
 VALIDATE_SCRIPT = ROOT / "deploy" / "cluster" / "validate.sh"
+CRI_ENDPOINT = "unix:///run/containerd/containerd.sock"
 
 
 def write_command(command_dir: Path, name: str, body: str) -> None:
@@ -121,6 +122,22 @@ fi""",
     write_command(command_dir, "kubelet", "printf '%s\\n' 'Kubernetes v1.36.4'")
     write_command(
         command_dir,
+        "sudo",
+        """printf 'sudo %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
+case "$*" in
+    '-n true') exit 0 ;;
+    chown*) exit 0 ;;
+esac
+command_name=$1
+shift
+if [ -x "$KIP_TEST_COMMAND_DIR/$command_name" ]; then
+    exec "$KIP_TEST_COMMAND_DIR/$command_name" "$@"
+fi
+exec "$command_name" "$@"
+""",
+    )
+    write_command(
+        command_dir,
         "dpkg-query",
         """if [ "${KIP_TEST_CONFLICT_PACKAGE:-}" != "" ]; then
     for argument in "$@"; do package_name=$argument; done
@@ -142,7 +159,9 @@ case "$package_name" in
     *) exit 1 ;;
 esac
 case "$*" in
-    *'${Status}|${Version}'*) printf '%s\\n' "install ok installed|$package_version" ;;
+    *'${Status}|${Version}'*)
+        printf '%s\\n' "${KIP_TEST_PACKAGE_SELECTION:-install} ok installed|$package_version"
+        ;;
     *) printf '%s\\n' "$package_version" ;;
 esac""",
     )
@@ -218,7 +237,7 @@ esac""",
         ;;
     *)
         printf '%s\\n' \
-            "{\\"status\\":{\\"conditions\\":[{\\"type\\":\\"RuntimeReady\\",\\"status\\":${KIP_TEST_RUNTIME_READY:-true}}]}}"
+            "{\\"status\\":{\\"conditions\\":[{\\"status\\":${KIP_TEST_RUNTIME_READY:-true},\\"type\\":\\"RuntimeReady\\"}]}}"
         ;;
 esac""",
     )
@@ -234,11 +253,15 @@ fi""",
     write_command(
         command_dir,
         "cilium",
-        """if [ "$*" = 'version --client' ]; then
+        """printf 'cilium-columns %s\\n' "${COLUMNS:-unset}" >> "$KIP_TEST_COMMAND_LOG"
+if [ "$*" = 'version --client' ]; then
     printf '%s\\n' 'cilium-cli: v0.19.7'
-elif echo "$*" | grep -q 'connectivity test' \
-    && [ "${KIP_TEST_CILIUM_CONNECTIVITY_FAIL:-0}" = 1 ]; then
-    exit 1
+elif echo "$*" | grep -q 'connectivity test'; then
+    printf 'cilium %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
+    case "$*" in
+        *--cleanup*) ;;
+        *) [ "${KIP_TEST_CILIUM_CONNECTIVITY_FAIL:-0}" != 1 ] || exit 1 ;;
+    esac
 else
     printf 'cilium %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
 fi""",
@@ -362,7 +385,7 @@ def test_bootstrap_maps_containerd_package_to_ubuntu_release(
         KIP_TEST_CONTAINERD_PACKAGE=package_version,
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     commands = cluster_fixture["command_log"].read_text()
     assert f"containerd.io={package_version}" in commands
     assert "docker-ce" not in commands
@@ -388,9 +411,18 @@ def test_bootstrap_renders_runtime_and_kubeadm_configuration(
     commands = cluster_fixture["command_log"].read_text()
     assert "oci://quay.io/cilium/charts/cilium@sha256:" in commands
     assert "taint nodes --all node-role.kubernetes.io/control-plane-" in commands
-    assert "cilium connectivity test" in commands
+    assert "cilium connectivity test --single-node --ip-families ipv4 --hubble=false" in commands
+    assert "cilium connectivity test --cleanup" in commands
     assert "12 passed" in result.stdout
     assert "install and validate the NVIDIA GPU Operator" in result.stdout
+
+
+def test_cilium_cli_uses_safe_terminal_width(cluster_fixture: dict[str, Path]) -> None:
+    result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture, COLUMNS="0")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = cluster_fixture["command_log"].read_text()
+    assert "cilium-columns 120" in commands
 
 
 def test_bootstrap_accepts_assigned_node_ip_override(cluster_fixture: dict[str, Path]) -> None:
@@ -398,6 +430,37 @@ def test_bootstrap_accepts_assigned_node_ip_override(cluster_fixture: dict[str, 
 
     assert result.returncode == 0
     assert "gpu-node-1 at 192.0.2.10" in result.stdout
+
+
+def test_non_root_runtime_validation_uses_sudo_for_cri_socket(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    result = run_cluster_script(
+        BOOTSTRAP_SCRIPT,
+        cluster_fixture,
+        KIP_TEST_EUID="1000",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = cluster_fixture["command_log"].read_text()
+    assert f"sudo crictl --runtime-endpoint {CRI_ENDPOINT} version" in commands
+    assert f"sudo crictl --runtime-endpoint {CRI_ENDPOINT} info" in commands
+    assert "sudo kubeadm config images pull --config" in commands
+
+
+def test_non_root_cluster_check_uses_sudo_for_cri_socket(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    result = run_cluster_script(
+        VALIDATE_SCRIPT,
+        cluster_fixture,
+        KIP_TEST_EUID="1000",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = cluster_fixture["command_log"].read_text()
+    assert f"sudo crictl --runtime-endpoint {CRI_ENDPOINT} version" in commands
+    assert f"sudo crictl --runtime-endpoint {CRI_ENDPOINT} info" in commands
 
 
 def test_bootstrap_requires_override_for_ambiguous_default_routes(
@@ -490,9 +553,12 @@ def test_healthy_existing_cluster_skips_kubeadm_init(cluster_fixture: dict[str, 
         BOOTSTRAP_SCRIPT,
         cluster_fixture,
         KIP_TEST_PACKAGES_INSTALLED="1",
+        KIP_TEST_PACKAGE_SELECTION="hold",
+        KIP_TEST_ROUTE_CONFLICT="1",
     )
 
     assert result.returncode == 0, result.stderr
+    assert "readonly variable" not in result.stderr
     commands = cluster_fixture["command_log"].read_text()
     assert "kubeadm init --config" not in commands
     assert "apt-get" not in commands
@@ -501,6 +567,7 @@ def test_healthy_existing_cluster_skips_kubeadm_init(cluster_fixture: dict[str, 
 def test_partial_cluster_state_fails_without_reset(cluster_fixture: dict[str, Path]) -> None:
     manifests = cluster_fixture["etc_root"] / "kubernetes" / "manifests"
     manifests.mkdir(parents=True)
+    (manifests / "kube-apiserver.yaml").write_text("apiVersion: v1\n")
 
     result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
 
@@ -512,6 +579,22 @@ def test_partial_cluster_state_fails_without_reset(cluster_fixture: dict[str, Pa
     )
     assert "kubeadm reset" not in commands
     assert "apt-get" not in commands
+
+
+def test_package_placeholder_directories_remain_fresh_retry_state(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    manifests = cluster_fixture["etc_root"] / "kubernetes" / "manifests"
+    kubelet_dir = cluster_fixture["var_root"] / "lib" / "kubelet"
+    manifests.mkdir(parents=True)
+    kubelet_dir.mkdir(parents=True)
+    (manifests / ".kubelet-keep").touch()
+    (kubelet_dir / ".kubelet-keep").touch()
+
+    result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+
+    assert result.returncode == 0, result.stderr
+    assert "cluster state fresh" in result.stdout
 
 
 def test_unrelated_runtime_package_fails_before_mutation(
@@ -552,6 +635,34 @@ def test_unmanaged_containerd_config_fails_before_mutation(
         else ""
     )
     assert "apt-get" not in commands
+
+
+def test_interrupted_package_stage_can_adopt_its_exact_containerd_package(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    containerd_dir = cluster_fixture["etc_root"] / "containerd"
+    modules_dir = cluster_fixture["etc_root"] / "modules-load.d"
+    sysctl_dir = cluster_fixture["etc_root"] / "sysctl.d"
+    containerd_dir.mkdir()
+    modules_dir.mkdir()
+    sysctl_dir.mkdir()
+    (containerd_dir / "config.toml").write_text("version = 3\n")
+    (modules_dir / "kube-inference-platform.conf").write_text("overlay\nbr_netfilter\n")
+    (sysctl_dir / "99-kube-inference-platform.conf").write_text(
+        "# Managed by Kube Inference Platform v0.1.\nnet.ipv4.ip_forward = 1\n"
+    )
+
+    result = run_cluster_script(
+        BOOTSTRAP_SCRIPT,
+        cluster_fixture,
+        KIP_TEST_PACKAGES_INSTALLED="1",
+        KIP_TEST_PACKAGE_SELECTION="hold",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    config = (containerd_dir / "config.toml").read_text()
+    assert "Managed by Kube Inference Platform" in config
+    assert (containerd_dir / "config.toml.kip-pre-bootstrap").exists()
 
 
 def test_existing_cluster_version_drift_fails_before_mutation(
@@ -599,6 +710,7 @@ def test_cilium_connectivity_failure_blocks_bootstrap(
 
     assert result.returncode == 1
     assert "Cluster health" in result.stdout
+    assert "cilium connectivity test --cleanup" in cluster_fixture["command_log"].read_text()
     assert "FAIL" in result.stdout
 
 

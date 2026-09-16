@@ -25,6 +25,23 @@ kip_has_command() {
     command -v "$command_name" >/dev/null 2>&1
 }
 
+kip_exec_raw() {
+    local exit_code restore_errexit=0
+
+    case "$-" in
+        *e*)
+            restore_errexit=1
+            set +e
+            ;;
+    esac
+    command "$@"
+    exit_code=$?
+    if [ "$restore_errexit" -eq 1 ]; then
+        set -e
+    fi
+    return "$exit_code"
+}
+
 kip_exec() {
     local command_name=$1
     local exit_code
@@ -32,27 +49,34 @@ kip_exec() {
 
     if [ "${KIP_TESTING:-0}" = "1" ]; then
         if [ -x "${KIP_TEST_COMMAND_DIR:?}/$command_name" ]; then
-            "${KIP_TEST_COMMAND_DIR}/$command_name" "$@" || {
+            if kip_exec_raw "${KIP_TEST_COMMAND_DIR}/$command_name" "$@"; then
+                return 0
+            else
                 exit_code=$?
                 return "$exit_code"
-            }
-            return
+            fi
         fi
 
         case "$command_name" in
             awk | basename | chmod | cp | cut | dirname | grep | head | install | mkdir | \
                 mktemp | mv | rm | sed | sort | tail | tr | wc)
-                command "$command_name" "$@"
-                return
+                if kip_exec_raw "$command_name" "$@"; then
+                    return 0
+                else
+                    exit_code=$?
+                    return "$exit_code"
+                fi
                 ;;
             *) return 127 ;;
         esac
     fi
 
-    command "$command_name" "$@" || {
+    if kip_exec_raw "$command_name" "$@"; then
+        return 0
+    else
         exit_code=$?
         return "$exit_code"
-    }
+    fi
 }
 
 kip_effective_uid() {
@@ -64,7 +88,10 @@ kip_acquire_privileges() {
         KIP_USE_SUDO=0
         return 0
     fi
-    if ! kip_has_command sudo || ! kip_exec sudo -v; then
+    if ! kip_has_command sudo; then
+        return 1
+    fi
+    if ! kip_exec sudo -n true >/dev/null 2>&1 && ! kip_exec sudo -v; then
         return 1
     fi
     KIP_USE_SUDO=1
@@ -124,7 +151,7 @@ kip_package_version() {
     output=$(kip_exec dpkg-query -W -f='${Status}|${Version}' "$package_name" 2>/dev/null) \
         || return 1
     case "$output" in
-        'install ok installed|'*) printf '%s' "${output#*|}" ;;
+        'install ok installed|'* | 'hold ok installed|'*) printf '%s' "${output#*|}" ;;
         *) return 1 ;;
     esac
 }

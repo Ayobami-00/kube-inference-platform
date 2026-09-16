@@ -71,10 +71,11 @@ esac""",
     write_command(
         command_dir,
         "sudo",
-        """if [ "${1:-}" = "-v" ]; then
-    exit 0
+        """printf "sudo %s\\n" "$*" >> "$KIP_TEST_COMMAND_LOG"
+if [ "${1:-}" = "-v" ]; then
+    [ "${KIP_TEST_SUDO_V_FAIL:-0}" != 1 ]
+    exit
 fi
-	printf "sudo %s\\n" "$*" >> "$KIP_TEST_COMMAND_LOG"
 """,
     )
     write_command(
@@ -272,3 +273,27 @@ def test_setup_installs_only_missing_packages_without_upgrade(
     assert "apt-get update" in commands
     assert "apt-get install -y --no-install-recommends jq" in commands
     assert "upgrade" not in commands
+
+
+def test_setup_uses_passwordless_sudo_without_forcing_credential_refresh(
+    host_fixture: tuple[Path, Path, Path],
+) -> None:
+    _, _, command_log = host_fixture
+
+    result = run_script(SETUP_SCRIPT, host_fixture, KIP_TEST_SUDO_V_FAIL="1")
+
+    assert result.returncode == 0
+    commands = command_log.read_text()
+    assert "sudo -n true" in commands
+    assert "sudo -v" not in commands
+
+
+def test_setup_installs_make_as_command_runner(
+    host_fixture: tuple[Path, Path, Path],
+) -> None:
+    _, _, command_log = host_fixture
+
+    result = run_script(SETUP_SCRIPT, host_fixture, KIP_MISSING_PACKAGE="make")
+
+    assert result.returncode == 0
+    assert "apt-get install -y --no-install-recommends make" in command_log.read_text()

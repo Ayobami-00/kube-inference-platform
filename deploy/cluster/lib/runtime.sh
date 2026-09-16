@@ -3,6 +3,14 @@
 # Kernel, swap, package, and containerd setup.
 
 KIP_CONTAINERD_WAS_PRESENT=0
+KIP_CONTAINERD_RETRY_OWNED=0
+
+kip_cluster_kernel_preparation_is_owned() {
+    [ -r "$KIP_ETC_ROOT/modules-load.d/kube-inference-platform.conf" ] \
+        && [ -r "$KIP_ETC_ROOT/sysctl.d/99-kube-inference-platform.conf" ] \
+        && command grep -Fq 'Managed by Kube Inference Platform' \
+            "$KIP_ETC_ROOT/sysctl.d/99-kube-inference-platform.conf"
+}
 
 kip_prepare_kernel() {
     local modules_file sysctl_file
@@ -58,10 +66,16 @@ kip_check_runtime_conflicts() {
             return 1
         fi
     done
-    if [ -e "$KIP_ETC_ROOT/containerd/config.toml" ] \
-        && ! kip_run_privileged grep -q 'Managed by Kube Inference Platform' \
+    if [ -e "$KIP_ETC_ROOT/containerd/config.toml" ]; then
+        if kip_run_privileged grep -q 'Managed by Kube Inference Platform' \
             "$KIP_ETC_ROOT/containerd/config.toml"; then
-        return 1
+            :
+        elif [ "$KIP_CONTAINERD_WAS_PRESENT" -eq 1 ] \
+            && kip_cluster_kernel_preparation_is_owned; then
+            KIP_CONTAINERD_RETRY_OWNED=1
+        else
+            return 1
+        fi
     fi
     if [ "${KIP_TESTING:-0}" != "1" ] \
         && [ "$KIP_CONTAINERD_WAS_PRESENT" -eq 0 ] \
@@ -201,10 +215,16 @@ kip_configure_containerd() {
         | command awk '/\/pause:/ {print; exit}') || return 1
     [ -n "$pause_image" ] || return 1
     config_file="$KIP_ETC_ROOT/containerd/config.toml"
-    if [ -r "$config_file" ] \
-        && ! command grep -q 'Managed by Kube Inference Platform' "$config_file"; then
-        [ "$KIP_CONTAINERD_WAS_PRESENT" -eq 0 ] || return 1
-        kip_backup_once "$config_file" "$KIP_ETC_ROOT/containerd/config.toml.kip-pre-bootstrap"
+    if [ -r "$config_file" ]; then
+        if kip_exec grep -q 'Managed by Kube Inference Platform' "$config_file"; then
+            :
+        elif [ "$KIP_CONTAINERD_WAS_PRESENT" -eq 0 ] \
+            || [ "$KIP_CONTAINERD_RETRY_OWNED" -eq 1 ]; then
+            kip_backup_once "$config_file" \
+                "$KIP_ETC_ROOT/containerd/config.toml.kip-pre-bootstrap"
+        else
+            return 1
+        fi
     fi
     rendered=$(kip_render_containerd_config "$pause_image") || return 1
     kip_install_file "$rendered" "$config_file"
@@ -232,14 +252,17 @@ kip_verify_containerd() {
     [ -S "$KIP_RUN_ROOT/containerd/containerd.sock" ] \
         || [ "${KIP_TESTING:-0}" = "1" ] \
         || return 1
-    version_output=$(kip_exec crictl --runtime-endpoint "$KIP_CRI_SOCKET" version 2>&1) \
+    version_output=$(kip_run_privileged crictl \
+        --runtime-endpoint "$KIP_CRI_SOCKET" version 2>&1) \
         || return 1
     printf '%s\n' "$version_output" \
         | command grep -Eq '^RuntimeApiVersion:[[:space:]]*v1$' \
         || return 1
-    info_output=$(kip_exec crictl --runtime-endpoint "$KIP_CRI_SOCKET" info 2>&1) \
+    info_output=$(kip_run_privileged crictl \
+        --runtime-endpoint "$KIP_CRI_SOCKET" info 2>&1) \
         || return 1
     compact=$(printf '%s' "$info_output" | command tr -d '[:space:]')
     printf '%s\n' "$compact" \
-        | command grep -Eq '"type":"RuntimeReady"[^}]*"status":true|"runtimeReady":true'
+        | command grep -Eq \
+            '"type":"RuntimeReady"[^}]*"status":true|"status":true[^}]*"type":"RuntimeReady"|"runtimeReady":true'
 }

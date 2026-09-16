@@ -6,6 +6,7 @@ KIP_GPU_NAMESPACE="gpu-operator"
 KIP_GPU_RELEASE="gpu-operator"
 KIP_GPU_NODE_NAME=""
 KIP_PHYSICAL_GPU_COUNT=0
+KIP_GPU_PREFLIGHT_ERROR=""
 
 kip_gpu_validate_driver_mode() {
     case "$1" in
@@ -47,13 +48,20 @@ kip_gpu_recorded_mode() {
 
 kip_gpu_release_is_exact() {
     local baseline_matches driver_enabled expected_driver_enabled recorded_digest recorded_mode
-    local status version
-    local status_json values_json
+    local chart status
+    local list_json status_json values_json
 
     status_json=$(kip_gpu_helm_status_json) || return 1
+    list_json=$(kip_exec helm list \
+        --namespace "$KIP_GPU_NAMESPACE" \
+        --filter "^$KIP_GPU_RELEASE$" \
+        --output json 2>/dev/null) || return 1
     values_json=$(kip_gpu_helm_values_json) || return 1
     status=$(printf '%s' "$status_json" | kip_exec jq -er '.info.status') || return 1
-    version=$(printf '%s' "$status_json" | kip_exec jq -er '.chart.metadata.version') || return 1
+    chart=$(printf '%s' "$list_json" | kip_exec jq -er \
+        --arg name "$KIP_GPU_RELEASE" \
+        --arg namespace "$KIP_GPU_NAMESPACE" \
+        '.[] | select(.name == $name and .namespace == $namespace) | .chart') || return 1
     recorded_mode=$(printf '%s' "$values_json" | kip_exec jq -er '.kip.driverMode') || return 1
     recorded_digest=$(printf '%s' "$values_json" | kip_exec jq -er '.kip.chartDigest') || return 1
     driver_enabled=$(printf '%s' "$values_json" | kip_exec jq -r '.driver.enabled') || return 1
@@ -90,7 +98,7 @@ kip_gpu_release_is_exact() {
         *) return 1 ;;
     esac
     [ "$status" = deployed ] \
-        && [ "$version" = "$KIP_GPU_OPERATOR_VERSION" ] \
+        && [ "$chart" = "gpu-operator-$KIP_GPU_OPERATOR_VERSION" ] \
         && [ "$recorded_mode" = "$KIP_GPU_DRIVER_MODE" ] \
         && [ "$recorded_digest" = "$KIP_GPU_OPERATOR_CHART_DIGEST" ] \
         && [ "$driver_enabled" = "$expected_driver_enabled" ] \
@@ -118,6 +126,16 @@ kip_gpu_host_driver_healthy() {
     [ -n "$inventory" ] || return 1
     topology=$(kip_exec nvidia-smi topo -m 2>/dev/null) || return 1
     [ -n "$topology" ]
+}
+
+kip_gpu_running_kernel_headers_available() {
+    local kernel output
+
+    kip_has_command apt-cache || return 1
+    kernel=$(kip_exec uname -r 2>/dev/null) || return 1
+    [ -n "$kernel" ] || return 1
+    output=$(kip_exec apt-cache madison "linux-headers-$kernel" 2>/dev/null) || return 1
+    [ -n "$output" ]
 }
 
 kip_gpu_detect_physical_hardware() {

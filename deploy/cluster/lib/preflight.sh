@@ -198,7 +198,7 @@ kip_resolve_node_ip() {
 }
 
 kip_networks_valid() {
-    local route route_cidr address
+    local route route_cidr address existing_state=${1:-fresh}
 
     kip_cidr_is_network "$KIP_POD_CIDR" || return 1
     kip_cidr_is_network "$KIP_SERVICE_CIDR" || return 1
@@ -208,6 +208,9 @@ kip_networks_valid() {
     if kip_ip_in_cidr "$KIP_NODE_IP_RESOLVED" "$KIP_POD_CIDR" \
         || kip_ip_in_cidr "$KIP_NODE_IP_RESOLVED" "$KIP_SERVICE_CIDR"; then
         return 1
+    fi
+    if [ "$existing_state" = healthy ]; then
+        return 0
     fi
 
     while IFS= read -r address; do
@@ -273,15 +276,29 @@ kip_existing_cluster_state() {
         && kip_run_privileged kubectl --kubeconfig "$admin_conf" get --raw=/readyz \
             >/dev/null 2>&1; then
         printf '%s' healthy
-    elif [ -e "$manifests" ] \
-        || [ -e "$etcd" ] \
+    elif kip_cluster_directory_has_state "$manifests" \
+        || kip_cluster_directory_has_state "$etcd" \
         || [ -e "$kubelet_config" ] \
         || [ -e "$kubelet_conf" ] \
-        || [ -e "$pki" ]; then
+        || kip_cluster_directory_has_state "$pki"; then
         printf '%s' partial
     else
         printf '%s' fresh
     fi
+}
+
+kip_cluster_directory_has_state() {
+    local entry path=$1
+
+    [ -d "$path" ] || return 1
+    for entry in "$path"/* "$path"/.[!.]* "$path"/..?*; do
+        [ -e "$entry" ] || continue
+        case "${entry##*/}" in
+            .kubelet-keep) continue ;;
+        esac
+        return 0
+    done
+    return 1
 }
 
 kip_swap_is_supported() {

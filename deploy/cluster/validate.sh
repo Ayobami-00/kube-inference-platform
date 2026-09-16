@@ -21,6 +21,8 @@ source "$KIP_CLUSTER_ROOT/lib/preflight.sh"
 source "$KIP_CLUSTER_ROOT/lib/runtime.sh"
 # shellcheck source=deploy/cluster/lib/kubernetes.sh
 source "$KIP_CLUSTER_ROOT/lib/kubernetes.sh"
+# shellcheck source=deploy/cluster/lib/cilium.sh
+source "$KIP_CLUSTER_ROOT/lib/cilium.sh"
 
 export LC_ALL=C
 KIP_VERBOSE=${KIP_VERBOSE:-0}
@@ -56,7 +58,7 @@ else
     kip_record FAIL "Node services" "containerd and kubelet must both be active."
 fi
 
-if kip_verify_containerd; then
+if kip_acquire_privileges && kip_verify_containerd; then
     kip_record PASS "Container runtime" "containerd CRI v1 is ready."
 else
     kip_record FAIL "Container runtime" "containerd socket or CRI readiness failed."
@@ -92,7 +94,7 @@ fi
 
 if kip_component_ready k8s-app=cilium \
     && kip_component_ready io.cilium/app=operator \
-    && kip_exec cilium status --wait --wait-duration 30s >/dev/null; then
+    && kip_cilium_cli status --wait --wait-duration 30s >/dev/null; then
     kip_record PASS "Cilium" "Agent and operator are ready."
 else
     kip_record FAIL "Cilium" "Agent, operator, or Cilium status is unhealthy."

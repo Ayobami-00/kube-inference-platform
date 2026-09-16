@@ -56,3 +56,26 @@ kip_gpu_capacity_matches_hardware() {
         && [ "$capacity" -eq "$allocatable" ] \
         && [ "$capacity" -eq "$KIP_PHYSICAL_GPU_COUNT" ]
 }
+
+kip_gpu_wait_until_ready() {
+    local deadline interval now timeout
+
+    timeout=${KIP_GPU_WAIT_TIMEOUT_SECONDS:-1500}
+    interval=${KIP_GPU_WAIT_INTERVAL_SECONDS:-10}
+    case "$timeout:$interval" in
+        *[!0-9:]*) return 1 ;;
+    esac
+    [ "$interval" -gt 0 ] || return 1
+    deadline=$(( $(command date +%s) + timeout ))
+
+    while true; do
+        if kip_gpu_cluster_policy_ready \
+            && kip_gpu_operand_pods_healthy \
+            && kip_gpu_capacity_matches_hardware; then
+            return 0
+        fi
+        now=$(command date +%s)
+        [ "$now" -lt "$deadline" ] || return 1
+        command sleep "$interval"
+    done
+}
