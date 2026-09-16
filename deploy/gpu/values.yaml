@@ -1,0 +1,84 @@
+# Kube Inference Platform v0.1 GPU Operator baseline.
+# Driver mode and immutable chart identity are recorded by install.sh as Helm values.
+clusterPolicy:
+  deployCR: true
+gpuCluster:
+  deployCR: false
+
+psa:
+  enabled: true
+
+nfd:
+  enabled: true
+
+cdi:
+  enabled: true
+  nriPluginEnabled: false
+
+sandboxWorkloads:
+  enabled: false
+
+driver:
+  enabled: true
+  version: "595.91.07"
+  kernelModuleType: auto
+  nvidiaDriverCRD:
+    enabled: false
+    deployDefaultCR: false
+
+toolkit:
+  enabled: true
+  env:
+    - name: CONTAINERD_CONFIG
+      value: /etc/containerd/config.toml
+    - name: CONTAINERD_SOCKET
+      value: /run/containerd/containerd.sock
+    - name: RUNTIME_CONFIG_SOURCE
+      value: file=/etc/containerd/config.toml
+    - name: RUNTIME_DROP_IN_CONFIG
+      value: /etc/containerd/conf.d/99-nvidia.toml
+
+devicePlugin:
+  enabled: true
+  config:
+    create: true
+    name: kip-whole-gpu
+    default: whole
+    data:
+      whole: |-
+        version: v1
+        flags:
+          migStrategy: none
+          failOnInitError: true
+
+gfd:
+  enabled: true
+
+dcgm:
+  enabled: false
+dcgmExporter:
+  enabled: false
+
+mig:
+  strategy: none
+migManager:
+  enabled: false
+
+gds:
+  enabled: false
+gdrcopy:
+  enabled: false
+vgpuManager:
+  enabled: false
+vgpuDeviceManager:
+  enabled: false
+vfioManager:
+  enabled: false
+kataManager:
+  enabled: false
+sandboxDevicePlugin:
+  enabled: false
+kataSandboxDevicePlugin:
+  enabled: false
+ccManager:
+  enabled: false

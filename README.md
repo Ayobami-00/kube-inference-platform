@@ -7,9 +7,9 @@ distributed execution, routing, autoscaling, SLO management, observability, and 
 optimisation.
 
 > [!IMPORTANT]
-> The repository currently contains the v0.1 foundation, portable host preparation, and
-> single-node Kubernetes bootstrap tooling. These layers are tested with deterministic
-> fixtures but have not yet been validated on target hardware. GPU integration, vLLM
+> The repository currently contains the v0.1 foundation, portable host preparation,
+> single-node Kubernetes bootstrap, and NVIDIA GPU stack tooling. These layers are tested
+> with deterministic fixtures but have not yet been validated on target hardware. vLLM
 > serving, observability, and real benchmark traffic are not yet implemented or validated.
 
 ## v0.1 objective
@@ -120,11 +120,15 @@ make host-check VERBOSE=1
 ```
 
 Before GPU Operator installation, unavailable NVIDIA hardware and driver checks are reported
-as `DEFERRED`. After GPU Operator installation, require all GPU checks to pass:
+as `DEFERRED`. `GPU_REQUIRED=1` is the strict host-level check for the explicit
+preinstalled-driver workflow:
 
 ```bash
 make host-check GPU_REQUIRED=1
 ```
+
+Operator-managed drivers live in the Operator's host-mounted driver root, so Kubernetes-level
+`gpu-check` and `gpu-smoke` are authoritative for the default Operator-managed workflow.
 
 Both `VERBOSE` and `GPU_REQUIRED` accept only `0` or `1`. Terminal colors are enabled only for
 interactive output and can be disabled explicitly with `NO_COLOR=1`. Host details are printed
@@ -201,14 +205,71 @@ TCP 6443 to trusted administrator addresses in both the provider and host firewa
 `~/.kube/config` and `/etc/kubernetes/admin.conf` as administrative credentials and never
 commit or print them.
 
+## NVIDIA GPU stack
+
+After `make cluster-bootstrap` passes, install the GPU stack directly on the target:
+
+```bash
+make gpu-install
+```
+
+The default `GPU_DRIVER_MODE=operator` lets GPU Operator install the pinned NVIDIA driver. A
+machine with a provider-installed driver must opt into the alternate mode, and its host
+`nvidia-smi` and topology checks must pass before the cluster is changed:
+
+```bash
+make host-check GPU_REQUIRED=1
+make gpu-install GPU_DRIVER_MODE=preinstalled
+```
+
+The v0.1 stack pins GPU Operator v26.7.0 and driver 595.91.07. Before Helm runs, the installer
+downloads Cosign into a temporary directory, checks its pinned checksum, confirms that the
+chart tag resolves to the committed OCI digest, and verifies NVIDIA's signature. Helm then
+installs that immutable chart digest as release `gpu-operator` in namespace `gpu-operator`.
+The selected driver mode and digest are stored in the release values.
+
+CDI is enabled, NRI is disabled, and ordinary Pods request the standard `nvidia.com/gpu`
+resource without a `runtimeClassName`. The NVIDIA toolkit writes its containerd drop-in under
+`/etc/containerd/conf.d`, which is already imported by the project-owned containerd
+configuration. Node Feature Discovery, the toolkit, Device Plugin, GPU Feature Discovery,
+and validators are enabled. DCGM Exporter is deferred to observability; MIG, time-slicing,
+DRA, and all other shared or partitioned allocation modes are disabled.
+
+The installer is deliberately a hard checkpoint. It requires Operator and operand health,
+requires Kubernetes capacity and allocatable `nvidia.com/gpu` to match the physical PCI GPU
+count, and runs a temporary Pod that requests one GPU and executes `nvidia-smi`. The Pod is
+deleted on success or failure, and cluster health is checked again. Do not proceed to vLLM
+unless the command completes successfully.
+
+Run read-only validation or repeat only the temporary workload independently:
+
+```bash
+make gpu-check
+make gpu-check VERBOSE=1
+make gpu-smoke
+make gpu-smoke VERBOSE=1
+```
+
+Safe reruns reconcile only the same release, namespace, chart version and digest, driver mode,
+and v0.1 values. Version, mode, allocation, or unmanaged-installation drift stops with
+diagnostics; it is never adopted or upgraded automatically. A failed Helm installation is
+not rolled back automatically so its Pods remain available for inspection. The tooling never
+uninstalls a host driver, unloads kernel modules, deletes NVIDIA CRDs, edits GRUB, blacklists
+modules, resets GPUs, repairs Secure Boot, or reboots the machine.
+
+GPU details remain terminal-only. Treat kubeconfig access and all registry credentials as
+sensitive, keep TCP 6443 restricted, and use `VERBOSE=1` only where terminal output is handled
+appropriately.
+
 ## v0.1 implementation milestones
 
 - [x] Create the repository foundation and runnable benchmark skeleton.
 - [x] Implement portable host preparation and validation tooling.
 - [x] Implement single-node Kubernetes bootstrap and CNI installation tooling.
 - [ ] Bootstrap and validate the single-node cluster on target hardware.
-- [ ] Implement NVIDIA GPU Operator installation and CUDA validation.
-- [ ] Provision the target host and validate the host and GPU slices.
+- [x] Implement NVIDIA GPU Operator installation and CUDA validation tooling.
+- [ ] Validate the NVIDIA GPU stack and CUDA smoke Pod on target hardware.
+- [ ] Provision the target host and validate the host, cluster, and GPU slices.
 - [ ] Deploy one vLLM model replica and expose it through a Kubernetes Service.
 - [ ] Verify non-streaming and streaming OpenAI-compatible requests.
 - [ ] Implement the asynchronous benchmark client and inference metrics.

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kip-gpu-smoke
+  namespace: default
+  labels:
+    app.kubernetes.io/name: kip-gpu-smoke
+    app.kubernetes.io/part-of: kube-inference-platform
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 300
+  containers:
+    - name: nvidia-smi
+      image: nvidia/cuda@sha256:e711c99333fdfe8ae1e677b4972be6c5021f0128a1d31f775c7e58d88921b6a9
+      imagePullPolicy: IfNotPresent
+      command:
+        - nvidia-smi
+      args:
+        - --query-gpu=index,name,uuid,driver_version,memory.total
+        - --format=csv,noheader
+      resources:
+        requests:
+          nvidia.com/gpu: "1"
+        limits:
+          nvidia.com/gpu: "1"

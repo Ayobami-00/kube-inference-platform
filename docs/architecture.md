@@ -1,6 +1,6 @@
 # v0.1 Architecture
 
-Status: **Host and single-node cluster tooling implemented locally; not yet validated on target hardware**
+Status: **Host, single-node cluster, and GPU tooling implemented locally; not yet validated on target hardware**
 
 The v0.1 milestone proves the smallest complete serving path on one SSH-accessible bare-metal NVIDIA GPU
 server. The platform composes Kubernetes, NVIDIA's Kubernetes integration, and vLLM rather than
@@ -25,7 +25,10 @@ flowchart LR
     Runtime --> ControlPlane[kubeadm control plane]
     ControlPlane --> CNI[Cilium CNI]
     CNI --> Ready[Ready and schedulable node]
-    Ready --> GPUOperator[NVIDIA GPU Operator - planned]
+    Ready --> GPUOperator[NVIDIA GPU Operator]
+    GPUOperator --> GPUReady[Whole nvidia.com/gpu resource]
+    GPUReady --> Smoke[Temporary nvidia-smi Pod]
+    Smoke --> VLLMRuntime[vLLM runtime - planned]
 ```
 
 ```mermaid
@@ -57,6 +60,19 @@ time to first token, time per output token, end-to-end latency, and throughput.
 The repository owns deployment configuration, experiment tooling, measurements, and the later
 orchestration layer. Kubernetes owns workload scheduling, vLLM owns within-replica inference
 scheduling and continuous batching, and NVIDIA's operators expose and monitor GPU hardware.
+
+## GPU enablement boundary
+
+The v0.1 GPU layer uses GPU Operator's classic `ClusterPolicy` and Kubernetes Device Plugin
+path. Operator-managed drivers are the default; a host driver is accepted only through the
+explicit preinstalled mode. CDI supplies devices to normal Pods without a runtime class.
+
+The layer intentionally exposes whole physical GPUs only. A hard checkpoint compares
+`nvidia.com/gpu` capacity and allocatable resources with NVIDIA display-class PCI devices,
+then schedules a digest-pinned CUDA Pod requesting exactly one GPU. vLLM remains blocked until
+that Pod runs `nvidia-smi` successfully and the cluster remains healthy afterward. DCGM
+Exporter belongs to the observability slice, while MIG, time-slicing, DRA, GPUDirect, and
+multi-node topology are deferred measured extensions.
 
 ## Deferred components
 

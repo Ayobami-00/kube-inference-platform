@@ -7,9 +7,9 @@ Operational commands and their verified order remain in the repository's root `R
 | --- | --- | --- |
 | `host/` | Provider-neutral host preparation and validation | Required host checks pass |
 | `cluster/` | Pinned containerd, kubeadm, and Cilium bootstrap | The node and all core system pods are healthy |
-| `gpu/` | NVIDIA GPU Operator values and CUDA validation | A Pod can consume `nvidia.com/gpu` |
+| `gpu/` | Pinned GPU Operator install, read-only validation, and CUDA smoke test | A whole-GPU Pod can consume `nvidia.com/gpu` and run `nvidia-smi` |
 | `runtime/` | The initial vLLM Deployment and Service | Streaming inference returns tokens |
 | `observability/` | Prometheus, Grafana, and DCGM integration | Runtime and GPU metrics are queryable |
 
-The `.gitkeep` files in the empty deployment directories are temporary and must be removed
-when the first real configuration file is added.
+The `.gitkeep` files in the remaining empty deployment directories are temporary and must be
+removed when the first real configuration file is added.

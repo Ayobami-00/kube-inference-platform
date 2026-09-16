@@ -3,13 +3,15 @@
 UV ?= uv
 VERBOSE ?= 0
 GPU_REQUIRED ?= 0
+GPU_DRIVER_MODE ?=
 NODE_IP ?=
 POD_CIDR ?=
 SERVICE_CIDR ?=
 DEPLOY_SCRIPTS := $(shell find deploy -type f -name '*.sh' -print | sort)
 
 .PHONY: help setup lint format-check deploy-script-check host-script-check test check \
-	bench-help host-check host-setup cluster-check cluster-bootstrap
+	bench-help host-check host-setup cluster-check cluster-bootstrap gpu-check gpu-install \
+	gpu-smoke
 
 help:
 	@echo "Available targets:"
@@ -25,6 +27,9 @@ help:
 	@echo "  host-setup    Prepare and validate the local target host"
 	@echo "  cluster-check  Validate the local single-node Kubernetes cluster"
 	@echo "  cluster-bootstrap  Bootstrap the local single-node Kubernetes cluster"
+	@echo "  gpu-check      Validate the local NVIDIA GPU stack without mutation"
+	@echo "  gpu-install    Install and validate the NVIDIA GPU Operator"
+	@echo "  gpu-smoke      Run a temporary in-cluster nvidia-smi smoke test"
 
 setup:
 	$(UV) sync
@@ -60,3 +65,15 @@ cluster-check:
 cluster-bootstrap:
 	@KIP_VERBOSE="$(VERBOSE)" KIP_NODE_IP="$(NODE_IP)" KIP_POD_CIDR="$(POD_CIDR)" \
 		KIP_SERVICE_CIDR="$(SERVICE_CIDR)" ./deploy/cluster/bootstrap.sh
+
+gpu-check:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_GPU_DRIVER_MODE="$(GPU_DRIVER_MODE)" \
+		./deploy/gpu/validate.sh
+
+gpu-install:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_GPU_DRIVER_MODE="$(GPU_DRIVER_MODE)" \
+		./deploy/gpu/install.sh
+
+gpu-smoke:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_GPU_DRIVER_MODE="$(GPU_DRIVER_MODE)" \
+		./deploy/gpu/smoke.sh
