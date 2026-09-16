@@ -6,7 +6,7 @@ kip_runtime_render_file() {
     local source=$1 destination=$2
 
     command awk \
-        -v namespace="$KIP_RUNTIME_NAMESPACE" \
+        -v runtime_namespace="$KIP_RUNTIME_NAMESPACE" \
         -v resource_name="$KIP_RUNTIME_RESOURCE_NAME" \
         -v profile_name="$KIP_MODEL_PROFILE" \
         -v profile_hash="$KIP_RUNTIME_PROFILE_HASH" \
@@ -46,7 +46,7 @@ kip_runtime_render_file() {
             next
         }
         {
-            gsub(/__NAMESPACE__/, namespace)
+            gsub(/__NAMESPACE__/, runtime_namespace)
             gsub(/__RESOURCE_NAME__/, resource_name)
             gsub(/__PROFILE_NAME__/, profile_name)
             gsub(/__PROFILE_HASH__/, profile_hash)

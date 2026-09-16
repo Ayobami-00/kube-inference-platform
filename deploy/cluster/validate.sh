@@ -94,7 +94,8 @@ fi
 
 if kip_component_ready k8s-app=cilium \
     && kip_component_ready io.cilium/app=operator \
-    && kip_cilium_cli status --wait --wait-duration 30s >/dev/null; then
+    && kip_cilium_cli status --wait --wait-duration 30s \
+        --interactive=false --output json >/dev/null; then
     kip_record PASS "Cilium" "Agent and operator are ready."
 else
     kip_record FAIL "Cilium" "Agent, operator, or Cilium status is unhealthy."

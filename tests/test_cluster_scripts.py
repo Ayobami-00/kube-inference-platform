@@ -61,6 +61,7 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
     packages_state = tmp_path / "packages-installed"
     network_state = tmp_path / "cni-network-present"
     firewall_state = tmp_path / "firewall-cleaned"
+    bpf_busy_state = tmp_path / "bpf-busy-once"
 
     jq_path = shutil.which("jq")
     sha_path = shutil.which("sha256sum") or shutil.which("shasum")
@@ -203,6 +204,12 @@ case "$*" in
     '-n true') exit 0 ;;
     chown*) exit 0 ;;
 esac
+if [ "${KIP_TEST_BPF_BUSY_ONCE:-0}" = 1 ] \
+    && [ "$*" = "rm -rf $KIP_SYS_FS_BPF_ROOT/cilium" ] \
+    && [ ! -e "$KIP_TEST_BPF_BUSY_STATE" ]; then
+    touch "$KIP_TEST_BPF_BUSY_STATE"
+    exit 1
+fi
 command_name=$1
 shift
 if [ -x "$KIP_TEST_COMMAND_DIR/$command_name" ]; then
@@ -439,6 +446,7 @@ esac""",
         "packages_state": packages_state,
         "network_state": network_state,
         "firewall_state": firewall_state,
+        "bpf_busy_state": bpf_busy_state,
         "firewall_capture": tmp_path / "firewall-restored.txt",
     }
 
@@ -459,6 +467,7 @@ def cluster_environment(
             "KIP_TEST_PACKAGES_STATE": str(fixture["packages_state"]),
             "KIP_TEST_NETWORK_STATE": str(fixture["network_state"]),
             "KIP_TEST_FIREWALL_STATE": str(fixture["firewall_state"]),
+            "KIP_TEST_BPF_BUSY_STATE": str(fixture["bpf_busy_state"]),
             "KIP_TEST_FIREWALL_CAPTURE": str(fixture["firewall_capture"]),
             "KIP_TEST_CONTAINERD_PACKAGE": ("2.3.4-2~ubuntu.24.04~noble"),
             "KIP_TEST_GPU_DIGEST": GPU_CHART_DIGEST,
@@ -548,6 +557,7 @@ def test_bootstrap_renders_runtime_and_kubeadm_configuration(
     assert "taint nodes --all node-role.kubernetes.io/control-plane-" in commands
     assert "cilium connectivity test --single-node --ip-families ipv4 --hubble=false" in commands
     assert "cilium connectivity test --cleanup" in commands
+    assert "cilium status --wait --wait-duration 10m --interactive=false --output json" in commands
     assert "12 passed" in result.stdout
     assert "install and validate the NVIDIA GPU Operator" in result.stdout
 
@@ -1002,6 +1012,28 @@ def test_destroy_is_idempotent(cluster_fixture: dict[str, Path]) -> None:
 
     assert repeated.returncode == 0
     assert "nothing to remove" in repeated.stdout
+
+
+def test_destroy_retries_busy_cilium_bpf_cleanup(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    cilium_bpf = cluster_fixture["bpf_root"] / "cilium" / "endpoints"
+    cilium_bpf.mkdir(parents=True)
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_BPF_BUSY_ONCE="1",
+        KIP_TEST_EUID="1000",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert cluster_fixture["bpf_busy_state"].exists()
+    assert not (cluster_fixture["bpf_root"] / "cilium").exists()
+    assert "8 passed" in result.stdout
 
 
 def test_destroy_resumes_from_private_teardown_marker(

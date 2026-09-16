@@ -16,7 +16,8 @@ kip_install_cilium() {
     kip_kubectl -n kube-system rollout status daemonset/cilium --timeout=10m >/dev/null
     kip_kubectl -n kube-system rollout status deployment/cilium-operator --timeout=10m \
         >/dev/null
-    kip_cilium_cli status --wait --wait-duration 10m
+    kip_cilium_cli status --wait --wait-duration 10m \
+        --interactive=false --output json >/dev/null
 }
 
 kip_run_dns_service_smoke() {

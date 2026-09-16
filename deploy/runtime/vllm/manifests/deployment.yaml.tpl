@@ -36,6 +36,7 @@ spec:
       annotations:
         kube-inference-platform/profile-sha256: __PROFILE_HASH__
     spec:
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 120
       securityContext:
         seccompProfile:
@@ -69,6 +70,7 @@ spec:
             - "__MAX_NUMBER_OF_SEQUENCES__"
             - --seed
             - "__SEED__"
+            - --no-enable-prefix-caching
           env:
             - name: HF_HOME
               value: /var/cache/kip/huggingface

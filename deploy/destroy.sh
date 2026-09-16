@@ -324,6 +324,29 @@ kip_destroy_network_filtering() {
     done
 }
 
+kip_destroy_remove_bpf_state() {
+    local attempt=0 pinned
+
+    while [ "$attempt" -lt 30 ]; do
+        kip_run_privileged rm -rf "$KIP_SYS_FS_BPF_ROOT/cilium" >/dev/null 2>&1 || true
+        if kip_run_privileged test -d "$KIP_SYS_FS_BPF_ROOT/tc/globals"; then
+            kip_run_privileged find "$KIP_SYS_FS_BPF_ROOT/tc/globals" \
+                -maxdepth 1 -name 'cilium*' -delete >/dev/null 2>&1 || true
+        fi
+        pinned=$(kip_run_privileged find "$KIP_SYS_FS_BPF_ROOT/tc/globals" \
+            -maxdepth 1 -name 'cilium*' -print -quit 2>/dev/null || true)
+        if ! kip_run_privileged test -e "$KIP_SYS_FS_BPF_ROOT/cilium" \
+            && [ -z "$pinned" ]; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        if [ "$attempt" -lt 30 ] && [ "${KIP_TESTING:-0}" != 1 ]; then
+            command sleep 2
+        fi
+    done
+    return 1
+}
+
 kip_destroy_network_and_state() {
     local interface interfaces mount_path namespace namespaces
 
@@ -358,11 +381,7 @@ EOF
     done <<EOF
 $interfaces
 EOF
-    kip_run_privileged rm -rf "$KIP_SYS_FS_BPF_ROOT/cilium"
-    if kip_run_privileged test -d "$KIP_SYS_FS_BPF_ROOT/tc/globals"; then
-        kip_run_privileged find "$KIP_SYS_FS_BPF_ROOT/tc/globals" \
-            -maxdepth 1 -name 'cilium*' -delete
-    fi
+    kip_destroy_remove_bpf_state || return 1
     kip_destroy_network_filtering || return 1
     kip_run_privileged rm -rf \
         "$KIP_ETC_ROOT/cni/net.d" \

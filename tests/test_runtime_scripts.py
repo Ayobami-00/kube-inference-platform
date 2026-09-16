@@ -138,7 +138,7 @@ case "$args" in
         printf '%s' "$KIP_TEST_IMAGE_DIGEST" ;;
     *'get deployment vllm-qwen25-7b -o json')
         live_image=${KIP_TEST_LIVE_IMAGE:-vllm/vllm-openai:v0.29.0-x86_64-cu129@$KIP_TEST_IMAGE_DIGEST}
-        printf '%s\n' "{\"metadata\":{\"labels\":{\"app.kubernetes.io/managed-by\":\"kube-inference-platform\"},\"annotations\":{\"kube-inference-platform/profile-sha256\":\"$KIP_TEST_PROFILE_HASH\"}},\"spec\":{\"replicas\":1,\"strategy\":{\"type\":\"Recreate\"},\"progressDeadlineSeconds\":2700,\"template\":{\"spec\":{\"terminationGracePeriodSeconds\":120,\"securityContext\":{\"seccompProfile\":{\"type\":\"RuntimeDefault\"}},\"containers\":[{\"image\":\"$live_image\",\"command\":[\"vllm\",\"serve\"],\"args\":[\"Qwen/Qwen2.5-7B-Instruct\",\"--revision\",\"$KIP_TEST_MODEL_REVISION\",\"--tokenizer-revision\",\"$KIP_TEST_MODEL_REVISION\",\"--served-model-name\",\"qwen2.5-7b-instruct\",\"--host\",\"0.0.0.0\",\"--port\",\"8000\",\"--dtype\",\"bfloat16\",\"--tensor-parallel-size\",\"1\",\"--max-model-len\",\"8192\",\"--gpu-memory-utilization\",\"0.9\",\"--max-num-seqs\",\"8\",\"--seed\",\"0\"],\"env\":[{\"name\":\"HF_HOME\",\"value\":\"/var/cache/kip/huggingface\"}],\"resources\":{\"requests\":{\"cpu\":\"4\",\"memory\":\"24Gi\",\"ephemeral-storage\":\"10Gi\",\"nvidia.com/gpu\":\"1\"},\"limits\":{\"cpu\":\"12\",\"memory\":\"48Gi\",\"ephemeral-storage\":\"20Gi\",\"nvidia.com/gpu\":\"1\"}},\"securityContext\":{\"allowPrivilegeEscalation\":false,\"capabilities\":{\"drop\":[\"ALL\"]}},\"startupProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":10,\"timeoutSeconds\":5,\"failureThreshold\":180},\"readinessProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":5,\"timeoutSeconds\":3,\"failureThreshold\":3},\"livenessProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":15,\"timeoutSeconds\":3,\"failureThreshold\":4},\"volumeMounts\":[{\"name\":\"model-cache\",\"mountPath\":\"/var/cache/kip\"},{\"name\":\"shared-memory\",\"mountPath\":\"/dev/shm\"}]}],\"volumes\":[{\"name\":\"model-cache\",\"hostPath\":{\"path\":\"$KIP_VAR_ROOT/lib/kube-inference-platform/model-cache/vllm\",\"type\":\"Directory\"}},{\"name\":\"shared-memory\",\"emptyDir\":{\"medium\":\"Memory\",\"sizeLimit\":\"4Gi\"}}]}}},\"status\":{\"availableReplicas\":1,\"readyReplicas\":1}}"
+        printf '%s\n' "{\"metadata\":{\"labels\":{\"app.kubernetes.io/managed-by\":\"kube-inference-platform\"},\"annotations\":{\"kube-inference-platform/profile-sha256\":\"$KIP_TEST_PROFILE_HASH\"}},\"spec\":{\"replicas\":1,\"strategy\":{\"type\":\"Recreate\"},\"progressDeadlineSeconds\":2700,\"template\":{\"spec\":{\"enableServiceLinks\":false,\"terminationGracePeriodSeconds\":120,\"securityContext\":{\"seccompProfile\":{\"type\":\"RuntimeDefault\"}},\"containers\":[{\"image\":\"$live_image\",\"command\":[\"vllm\",\"serve\"],\"args\":[\"Qwen/Qwen2.5-7B-Instruct\",\"--revision\",\"$KIP_TEST_MODEL_REVISION\",\"--tokenizer-revision\",\"$KIP_TEST_MODEL_REVISION\",\"--served-model-name\",\"qwen2.5-7b-instruct\",\"--host\",\"0.0.0.0\",\"--port\",\"8000\",\"--dtype\",\"bfloat16\",\"--tensor-parallel-size\",\"1\",\"--max-model-len\",\"8192\",\"--gpu-memory-utilization\",\"0.9\",\"--max-num-seqs\",\"8\",\"--seed\",\"0\",\"--no-enable-prefix-caching\"],\"env\":[{\"name\":\"HF_HOME\",\"value\":\"/var/cache/kip/huggingface\"}],\"resources\":{\"requests\":{\"cpu\":\"4\",\"memory\":\"24Gi\",\"ephemeral-storage\":\"10Gi\",\"nvidia.com/gpu\":\"1\"},\"limits\":{\"cpu\":\"12\",\"memory\":\"48Gi\",\"ephemeral-storage\":\"20Gi\",\"nvidia.com/gpu\":\"1\"}},\"securityContext\":{\"allowPrivilegeEscalation\":false,\"capabilities\":{\"drop\":[\"ALL\"]}},\"startupProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":10,\"timeoutSeconds\":5,\"failureThreshold\":180},\"readinessProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":5,\"timeoutSeconds\":3,\"failureThreshold\":3},\"livenessProbe\":{\"httpGet\":{\"path\":\"/health\"},\"periodSeconds\":15,\"timeoutSeconds\":3,\"failureThreshold\":4},\"volumeMounts\":[{\"name\":\"model-cache\",\"mountPath\":\"/var/cache/kip\"},{\"name\":\"shared-memory\",\"mountPath\":\"/dev/shm\"}]}],\"volumes\":[{\"name\":\"model-cache\",\"hostPath\":{\"path\":\"$KIP_VAR_ROOT/lib/kube-inference-platform/model-cache/vllm\",\"type\":\"Directory\"}},{\"name\":\"shared-memory\",\"emptyDir\":{\"medium\":\"Memory\",\"sizeLimit\":\"4Gi\"}}]}}},\"status\":{\"availableReplicas\":1,\"readyReplicas\":1}}"
         ;;
     *'get pods -l '*' -o json')
         printf '%s\n' '{"items":[{"spec":{"nodeName":"gpu-node-1"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}],"containerStatuses":[{"ready":true,"restartCount":'"${KIP_TEST_RESTARTS:-0}"',"state":{"running":{}}}]}}]}'
@@ -148,7 +148,8 @@ case "$args" in
         ;;
     *'get deployment vllm-qwen25-7b'*) [ -e "$KIP_TEST_DEPLOYMENT_STATE" ] ;;
     *'get service vllm-qwen25-7b'*) [ -e "$KIP_TEST_SERVICE_STATE" ] ;;
-    *'get endpoints vllm-qwen25-7b -o json') printf '%s\n' '{"subsets":[{"addresses":[{"ip":"10.0.0.2"}]}]}' ;;
+    *'get endpointslice -l kubernetes.io/service-name=vllm-qwen25-7b -o json')
+        printf '%s\n' '{"items":[{"endpoints":[{"addresses":["10.0.0.2"],"conditions":{"ready":true}}]}]}' ;;
     *'apply -f '*'namespace.yaml'*) touch "$KIP_TEST_NAMESPACE_STATE" ;;
     *'apply -f '*'service.yaml'*) touch "$KIP_TEST_SERVICE_STATE" ;;
     *'apply -f '*'deployment.yaml'*) touch "$KIP_TEST_DEPLOYMENT_STATE" ;;
@@ -267,15 +268,19 @@ def test_runtime_artifacts_pin_safe_single_gpu_baseline() -> None:
     assert "allowPrivilegeEscalation: false" in deployment
     assert 'drop: ["ALL"]' in deployment
     assert "type: RuntimeDefault" in deployment
+    assert "enableServiceLinks: false" in deployment
     assert "failureThreshold: 180" in deployment
     assert "sizeLimit: __SHARED_MEMORY_SIZE__" in deployment
     assert "type: Directory" in deployment
     assert "runtimeClassName" not in deployment
     assert "hostNetwork" not in deployment
     assert "--trust-remote-code" not in deployment
+    assert "--no-enable-prefix-caching" in deployment
     assert "type: ClusterIP" in service
     assert "NodePort" not in service
     assert "nvidia.com/gpu" not in smoke_pod
+    render = (ROOT / "deploy" / "runtime" / "vllm" / "lib" / "render.sh").read_text()
+    assert "-v namespace=" not in render
 
 
 @pytest.mark.parametrize(

@@ -37,6 +37,7 @@ kip_runtime_deployment_contract_matches() {
         and .spec.replicas == 1
         and .spec.strategy.type == "Recreate"
         and .spec.progressDeadlineSeconds == 2700
+        and .spec.template.spec.enableServiceLinks == false
         and .spec.template.spec.terminationGracePeriodSeconds == 120
         and .spec.template.spec.hostNetwork != true
         and .spec.template.spec.hostPID != true
@@ -50,7 +51,8 @@ kip_runtime_deployment_contract_matches() {
             "--served-model-name", $served, "--host", "0.0.0.0", "--port", $port,
             "--dtype", $dtype, "--tensor-parallel-size", $tensor_parallel,
             "--max-model-len", $max_model_len, "--gpu-memory-utilization", $gpu_util,
-            "--max-num-seqs", $max_sequences, "--seed", $seed
+            "--max-num-seqs", $max_sequences, "--seed", $seed,
+            "--no-enable-prefix-caching"
         ]
         and .spec.template.spec.containers[0].resources.requests.cpu == $cpu_request
         and .spec.template.spec.containers[0].resources.requests.memory == $memory_request
@@ -142,13 +144,18 @@ kip_runtime_service_contract_matches() {
 }
 
 kip_runtime_service_healthy() {
-    local endpoints
+    local endpoint_slices
 
     kip_runtime_service_contract_matches || return 1
-    endpoints=$(kip_kubectl -n "$KIP_RUNTIME_NAMESPACE" get endpoints \
-        "$KIP_RUNTIME_RESOURCE_NAME" -o json 2>/dev/null) || return 1
-    printf '%s' "$endpoints" | kip_exec jq -e \
-        '[.subsets[]?.addresses[]?] | length == 1' >/dev/null
+    endpoint_slices=$(kip_kubectl -n "$KIP_RUNTIME_NAMESPACE" get endpointslice \
+        -l "kubernetes.io/service-name=$KIP_RUNTIME_RESOURCE_NAME" \
+        -o json 2>/dev/null) || return 1
+    printf '%s' "$endpoint_slices" | kip_exec jq -e '
+        [.items[].endpoints[]?
+            | select(.conditions.ready != false)
+            | .addresses[]?]
+        | length == 1
+    ' >/dev/null
 }
 
 kip_runtime_stop_port_forward() {
