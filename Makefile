@@ -4,6 +4,8 @@ UV ?= uv
 VERBOSE ?= 0
 GPU_REQUIRED ?= 0
 GPU_DRIVER_MODE ?=
+RUNTIME ?= vllm
+MODEL_PROFILE ?= qwen2.5-7b-instruct
 CONFIRM_DESTROY ?=
 NODE_IP ?=
 POD_CIDR ?=
@@ -12,7 +14,7 @@ DEPLOY_SCRIPTS := $(shell find deploy -type f -name '*.sh' -print | sort)
 
 .PHONY: help setup lint format-check deploy-script-check host-script-check test check \
 	bench-help host-check host-setup cluster-check cluster-bootstrap gpu-check gpu-install \
-	gpu-smoke destroy
+	gpu-smoke runtime-check runtime-deploy runtime-smoke destroy
 
 help:
 	@echo "Available targets:"
@@ -31,7 +33,10 @@ help:
 	@echo "  gpu-check      Validate the local NVIDIA GPU stack without mutation"
 	@echo "  gpu-install    Install and validate the NVIDIA GPU Operator"
 	@echo "  gpu-smoke      Run a temporary in-cluster nvidia-smi smoke test"
-	@echo "  destroy        Remove the KIP-managed GPU and Kubernetes stack"
+	@echo "  runtime-check  Validate the selected inference runtime without generation"
+	@echo "  runtime-deploy  Deploy and validate the selected inference runtime"
+	@echo "  runtime-smoke  Run temporary OpenAI-compatible inference checks"
+	@echo "  destroy        Remove the KIP-managed runtime, GPU, and Kubernetes stack"
 
 setup:
 	$(UV) sync
@@ -79,6 +84,18 @@ gpu-install:
 gpu-smoke:
 	@KIP_VERBOSE="$(VERBOSE)" KIP_GPU_DRIVER_MODE="$(GPU_DRIVER_MODE)" \
 		./deploy/gpu/smoke.sh
+
+runtime-check:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_RUNTIME="$(RUNTIME)" \
+		KIP_MODEL_PROFILE="$(MODEL_PROFILE)" ./deploy/runtime/dispatch.sh check
+
+runtime-deploy:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_RUNTIME="$(RUNTIME)" \
+		KIP_MODEL_PROFILE="$(MODEL_PROFILE)" ./deploy/runtime/dispatch.sh deploy
+
+runtime-smoke:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_RUNTIME="$(RUNTIME)" \
+		KIP_MODEL_PROFILE="$(MODEL_PROFILE)" ./deploy/runtime/dispatch.sh smoke
 
 destroy:
 	@KIP_VERBOSE="$(VERBOSE)" KIP_CONFIRM_DESTROY="$(CONFIRM_DESTROY)" \

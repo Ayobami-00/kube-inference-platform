@@ -10,6 +10,8 @@ KIP_CLUSTER_ROOT="$KIP_DEPLOY_ROOT/cluster"
 readonly KIP_CLUSTER_ROOT
 KIP_GPU_ROOT="$KIP_DEPLOY_ROOT/gpu"
 readonly KIP_GPU_ROOT
+KIP_RUNTIME_ROOT="$KIP_DEPLOY_ROOT/runtime/vllm"
+readonly KIP_RUNTIME_ROOT
 
 # shellcheck source=deploy/lib/ui.sh
 source "$KIP_DEPLOY_ROOT/lib/ui.sh"
@@ -17,6 +19,8 @@ source "$KIP_DEPLOY_ROOT/lib/ui.sh"
 source "$KIP_CLUSTER_ROOT/versions.env"
 # shellcheck source=deploy/gpu/versions.env
 source "$KIP_GPU_ROOT/versions.env"
+# shellcheck source=deploy/runtime/vllm/versions.env
+source "$KIP_RUNTIME_ROOT/versions.env"
 # shellcheck source=deploy/cluster/lib/common.sh
 source "$KIP_CLUSTER_ROOT/lib/common.sh"
 # shellcheck source=deploy/cluster/lib/preflight.sh
@@ -32,6 +36,9 @@ KIP_OPT_ROOT=${KIP_OPT_ROOT:-/opt}
 KIP_SYS_FS_BPF_ROOT=${KIP_SYS_FS_BPF_ROOT:-/sys/fs/bpf}
 KIP_DESTROY_STATE_DIR="$KIP_VAR_ROOT/lib/kube-inference-platform"
 KIP_DESTROY_STATE_FILE="$KIP_DESTROY_STATE_DIR/destroying"
+KIP_RUNTIME_NAMESPACE="kip-runtime"
+KIP_RUNTIME_RESOURCE_NAME="vllm-qwen25-7b"
+KIP_RUNTIME_PROFILE_FILE="$KIP_RUNTIME_ROOT/profiles/qwen2.5-7b-instruct.json"
 
 kip_ui_init
 kip_cluster_validate_boolean VERBOSE "$KIP_VERBOSE"
@@ -75,6 +82,7 @@ kip_destroy_has_runtime_residue() {
     [ -e "$KIP_OPT_ROOT/cni/bin/cilium-cni" ] && return 0
     [ -e "$KIP_RUN_ROOT/cilium" ] && return 0
     [ -e "$KIP_RUN_ROOT/nvidia" ] && return 0
+    [ -e "$KIP_DESTROY_STATE_DIR/model-cache" ] && return 0
     [ -e "$KIP_SYS_FS_BPF_ROOT/cilium" ] && return 0
     if [ "$KIP_USE_SUDO" = "1" ]; then
         bpf_entries=$(kip_run_privileged find "$KIP_SYS_FS_BPF_ROOT/tc/globals" \
@@ -145,12 +153,102 @@ kip_destroy_gpu_release_is_owned() {
             "\"chartDigest\"[[:space:]]*:[[:space:]]*\"$KIP_GPU_OPERATOR_CHART_DIGEST\""
 }
 
+kip_destroy_runtime_exists() {
+    local name
+
+    name=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get namespace "$KIP_RUNTIME_NAMESPACE" \
+        -o 'jsonpath={.metadata.name}' 2>/dev/null) || return 1
+    [ "$name" = "$KIP_RUNTIME_NAMESPACE" ]
+}
+
+kip_destroy_runtime_profile_hash() {
+    kip_exec jq -cS . "$KIP_RUNTIME_PROFILE_FILE" \
+        | kip_exec sha256sum \
+        | command awk '{print $1}'
+}
+
+kip_destroy_runtime_resource_exists() {
+    local kind=$1 name
+
+    name=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        -n "$KIP_RUNTIME_NAMESPACE" get "$kind" "$KIP_RUNTIME_RESOURCE_NAME" \
+        -o 'jsonpath={.metadata.name}' 2>/dev/null) || return 1
+    [ "$name" = "$KIP_RUNTIME_RESOURCE_NAME" ]
+}
+
+kip_destroy_runtime_is_owned() {
+    local digest kind managed model_revision profile_hash recorded_hash resources
+
+    managed=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get namespace "$KIP_RUNTIME_NAMESPACE" \
+        -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/managed-by}' \
+        2>/dev/null) || return 1
+    [ "$managed" = kube-inference-platform ] || return 1
+    profile_hash=$(kip_destroy_runtime_profile_hash) || return 1
+    recorded_hash=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get namespace "$KIP_RUNTIME_NAMESPACE" \
+        -o 'jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}' \
+        2>/dev/null) || return 1
+    [ "$recorded_hash" = "$profile_hash" ] || return 1
+
+    resources=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        -n "$KIP_RUNTIME_NAMESPACE" get deployment,service -o json 2>/dev/null) || return 1
+    printf '%s' "$resources" | kip_exec jq -e --arg name "$KIP_RUNTIME_RESOURCE_NAME" '
+        all(.items[]?;
+            (.kind == "Deployment" or .kind == "Service")
+            and .metadata.name == $name
+            and .metadata.labels["app.kubernetes.io/managed-by"]
+                == "kube-inference-platform")
+    ' >/dev/null || return 1
+
+    model_revision=$(kip_exec jq -r '.model.revision' "$KIP_RUNTIME_PROFILE_FILE") || return 1
+    for kind in deployment service; do
+        kip_destroy_runtime_resource_exists "$kind" || continue
+        managed=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$KIP_RUNTIME_NAMESPACE" get "$kind" "$KIP_RUNTIME_RESOURCE_NAME" \
+            -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/managed-by}' \
+            2>/dev/null) || return 1
+        digest=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$KIP_RUNTIME_NAMESPACE" get "$kind" "$KIP_RUNTIME_RESOURCE_NAME" \
+            -o 'jsonpath={.metadata.annotations.kube-inference-platform/image-digest}' \
+            2>/dev/null) || return 1
+        recorded_hash=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$KIP_RUNTIME_NAMESPACE" get "$kind" "$KIP_RUNTIME_RESOURCE_NAME" \
+            -o 'jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}' \
+            2>/dev/null) || return 1
+        [ "$managed" = kube-inference-platform ] \
+            && [ "$digest" = "$KIP_VLLM_IMAGE_DIGEST" ] \
+            && [ "$recorded_hash" = "$profile_hash" ] || return 1
+        [ "$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$KIP_RUNTIME_NAMESPACE" get "$kind" "$KIP_RUNTIME_RESOURCE_NAME" \
+            -o 'jsonpath={.metadata.annotations.kube-inference-platform/model-revision}' \
+            2>/dev/null)" = "$model_revision" ] || return 1
+    done
+}
+
 kip_destroy_cluster_releases() {
     local output
 
     if ! kip_destroy_api_ready; then
         kip_note "Kubernetes API is unavailable; kubeadm reset will remove local cluster state."
         return 0
+    fi
+    if kip_destroy_runtime_exists; then
+        kip_destroy_runtime_is_owned || return 1
+        kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            delete namespace "$KIP_RUNTIME_NAMESPACE" --wait=true --timeout=10m >/dev/null \
+            || return 1
     fi
     if kip_destroy_helm_release_exists gpu-operator gpu-operator; then
         kip_destroy_gpu_release_is_owned || return 1
@@ -277,6 +375,7 @@ EOF
         "$KIP_VAR_ROOT/lib/containerd" \
         "$KIP_VAR_ROOT/lib/etcd" \
         "$KIP_VAR_ROOT/lib/kubelet" \
+        "$KIP_DESTROY_STATE_DIR/model-cache" \
         "$KIP_USR_LOCAL_BIN/../nvidia/toolkit"
     kip_run_privileged rm -f "$KIP_OPT_ROOT/cni/bin/cilium-cni"
 }
@@ -371,9 +470,10 @@ fi
 
 if kip_destroy_cluster_releases; then
     kip_record PASS "Cluster releases" \
-        "KIP-managed GPU Operator removed; Cilium retained through kubeadm reset."
+        "KIP-managed runtime and GPU Operator removed; Cilium retained through kubeadm reset."
 else
-    kip_record FAIL "Cluster releases" "A release is unmanaged or could not be removed safely."
+    kip_record FAIL "Cluster releases" \
+        "A runtime or release is unmanaged or could not be removed safely."
     kip_summary "Platform teardown"
     exit 1
 fi
@@ -414,7 +514,7 @@ if ! kip_destroy_has_cluster_state \
     && ! kip_destroy_has_runtime_residue \
     && [ ! -e "$KIP_ETC_ROOT/sysctl.d/99-kube-inference-platform.conf" ]; then
     kip_run_privileged rm -rf "$KIP_DESTROY_STATE_DIR"
-    kip_record PASS "Final verification" "The host is ready for a fresh host-to-GPU bootstrap."
+    kip_record PASS "Final verification" "The host is ready for a fresh host-to-runtime bootstrap."
 else
     kip_record FAIL "Final verification" "KIP-managed cluster state remains on the host."
     kip_summary "Platform teardown"
@@ -422,5 +522,5 @@ else
 fi
 
 kip_summary "Platform teardown"
-printf '\n%sReady for a fresh run:%s make host-setup, make cluster-bootstrap, then make gpu-install.\n' \
+printf '\n%sReady for a fresh run:%s make host-setup, make cluster-bootstrap, make gpu-install, then make runtime-deploy.\n' \
     "$KIP_COLOR_GREEN" "$KIP_COLOR_RESET"

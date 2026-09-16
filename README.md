@@ -8,10 +8,10 @@ optimisation.
 
 > [!IMPORTANT]
 > The repository currently contains the v0.1 foundation, portable host preparation,
-> single-node Kubernetes bootstrap, and NVIDIA GPU stack tooling. These layers are tested
-> with deterministic fixtures and have passed the complete host-to-CUDA path on target
-> NVIDIA A10 hardware. vLLM serving, observability, and real benchmark traffic are not yet
-> implemented or validated.
+> single-node Kubernetes bootstrap, NVIDIA GPU stack tooling, and a pluggable runtime layer
+> with a vLLM adapter. The host-to-CUDA path has passed on target NVIDIA A10 hardware. The
+> runtime is covered by deterministic local tests but still requires its target-hardware
+> inference checkpoint. Observability and real benchmark traffic are not yet implemented.
 
 ## v0.1 objective
 
@@ -276,6 +276,79 @@ GPU details remain terminal-only. Treat kubeconfig access and all registry crede
 sensitive, keep TCP 6443 restricted, and use `VERBOSE=1` only where terminal output is handled
 appropriately.
 
+## vLLM runtime checkpoint
+
+After the GPU hard checkpoint passes, deploy the committed runtime and model profile:
+
+```bash
+make runtime-deploy
+```
+
+The public `runtime-*` interface dispatches to a runtime-specific adapter. v0.1 allowlists only
+`RUNTIME=vllm` with `MODEL_PROFILE=qwen2.5-7b-instruct`; arbitrary images, models, resource
+overrides, and engine arguments are rejected. The profile pins Qwen2.5-7B-Instruct at revision
+`a09a35458c702b33eeacc393d103063234e8bc28`, the served name
+`qwen2.5-7b-instruct`, and the immutable Linux/amd64 CUDA 12.9 vLLM v0.29.0 image.
+
+The baseline runs one BF16 replica on one whole GPU with tensor parallelism `1`, an 8,192-token
+maximum model length, GPU memory utilization `0.90`, at most eight sequences, and seed `0`.
+It deliberately avoids quantization, CPU offload, speculative decoding, remote model code,
+and distributed execution. The Pod requests 4 CPU, 24 GiB memory, 10 GiB ephemeral storage,
+and one GPU; limits are 12 CPU, 48 GiB memory, 20 GiB ephemeral storage, and one GPU. A
+memory-backed 4 GiB `/dev/shm`, restrictive container security context, and health probes are
+included.
+
+The first deployment may spend substantial time pulling the vLLM image and downloading the
+approximately 15.2 GB model before probes become healthy. The installer permits a 45-minute
+rollout and requires either 60 GiB free when the model cache and containerd share a filesystem,
+or 25 GiB for the cache plus 30 GiB for containerd when they are separate. Model files persist
+across Pod restarts and matching redeployments under:
+
+```text
+/var/lib/kube-inference-platform/model-cache/vllm
+```
+
+The baseline model is public and requires no Hugging Face credential. A future committed
+profile may name a Secret in `kip-runtime`; that Secret must contain a `token` key. The tooling
+checks only for the key and never reads or prints its value.
+
+The Service is deliberately internal-only (`ClusterIP`) on port 8000. For manual inspection
+from the target, start a local tunnel:
+
+```bash
+kubectl -n kip-runtime port-forward service/vllm-qwen25-7b 8000:8000
+curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/v1/models
+```
+
+Read-only validation checks the pinned profile, image, model revision, ownership, Deployment,
+Pod, Service endpoint, `/health`, and `/v1/models` without creating resources or generating
+tokens:
+
+```bash
+make runtime-check
+make runtime-check VERBOSE=1
+```
+
+The inference checkpoint creates a temporary in-cluster client Pod and ConfigMap, then removes
+both on success, failure, or interruption:
+
+```bash
+make runtime-smoke
+make runtime-smoke VERBOSE=1
+```
+
+It verifies health, exact model discovery, non-streaming chat and legacy completions, and
+streaming chat SSE. Streaming must contain at least eight non-empty content deltas, finish with
+`[DONE]`, and span at least 100 ms between the first and last content arrival so a buffered
+response cannot pass. Cluster and GPU validation run again after inference.
+
+Safe reruns reapply only an exact managed installation and repeat all validation. Profile,
+image, model, ownership, or active-runtime drift is refused rather than adopted. The
+`Recreate` Deployment strategy prevents an old full-GPU Pod from blocking its replacement.
+On failure, inspect the printed Deployment, Pod, log, and event diagnostics; `VERBOSE=1` adds
+successful command details without writing response bodies or traces to disk.
+
 ## Platform teardown
 
 To return a target to the pre-cluster state for a fresh bootstrap, run:
@@ -291,14 +364,15 @@ non-interactive run, use:
 make destroy CONFIRM_DESTROY=1
 ```
 
-Teardown first verifies the KIP ownership markers and pinned package versions. It then
-uninstalls the matching GPU Operator, keeps Cilium alive while `kubeadm reset` stops remaining
-Pod sandboxes, and removes Cilium namespaces, interfaces, CNI binaries, pinned BPF objects,
-and only firewall rules in `CILIUM_` or `KUBE-` chains. It then unmounts project runtime
-mounts, removes KIP cluster/runtime data and the pinned Kubernetes/containerd packages,
-restores the original `fstab`, and removes the project-owned sysctl and modules-load files. A
-matching user kubeconfig is removed; a changed kubeconfig is preserved. A project-owned
-teardown marker makes interrupted runs safely resumable.
+Teardown first verifies the KIP ownership markers and pinned package versions. It deletes an
+exactly matching managed runtime namespace before uninstalling the matching GPU Operator,
+keeps Cilium alive while `kubeadm reset` stops remaining Pod sandboxes, and removes Cilium
+namespaces, interfaces, CNI binaries, pinned BPF objects, and only firewall rules in `CILIUM_`
+or `KUBE-` chains. It then unmounts project runtime mounts, removes the node-local model cache,
+KIP cluster/runtime data, and the pinned Kubernetes/containerd packages, restores the original
+`fstab`, and removes the project-owned sysctl and modules-load files. A matching user
+kubeconfig is removed; a changed kubeconfig is preserved. A project-owned teardown marker
+makes interrupted runs safely resumable.
 
 The command deliberately preserves SSH access, the operating system, kernel packages,
 inspection prerequisites installed by `host-setup`, and shared Helm/Cilium CLI binaries. It
@@ -310,6 +384,7 @@ state blindly. After a successful teardown, start again with:
 make host-setup
 make cluster-bootstrap
 make gpu-install
+make runtime-deploy
 ```
 
 ## v0.1 implementation milestones
@@ -321,8 +396,8 @@ make gpu-install
 - [x] Implement NVIDIA GPU Operator installation and CUDA validation tooling.
 - [x] Validate the NVIDIA GPU stack and CUDA smoke Pod on target hardware.
 - [x] Provision the target host and validate the host, cluster, and GPU slices.
-- [ ] Deploy one vLLM model replica and expose it through a Kubernetes Service.
-- [ ] Verify non-streaming and streaming OpenAI-compatible requests.
+- [x] Implement the pluggable runtime layer and vLLM inference-checkpoint tooling.
+- [ ] Validate vLLM and streaming OpenAI-compatible inference on target hardware.
 - [ ] Implement the asynchronous benchmark client and inference metrics.
 - [ ] Install Prometheus, Grafana, and DCGM Exporter.
 - [ ] Run and document the baseline concurrency experiment.

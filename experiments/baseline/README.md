@@ -32,8 +32,11 @@ tokens.
 - Kubernetes:
 - CNI:
 - GPU Operator:
-- vLLM:
+- Runtime adapter:
+- Runtime profile:
+- Runtime image digest:
 - Model revision:
+- Served model name:
 
 ## Runtime configuration
 

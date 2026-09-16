@@ -1,6 +1,6 @@
 # v0.1 Architecture
 
-Status: **Host, single-node cluster, and GPU tooling implemented locally; not yet validated on target hardware**
+Status: **Host, single-node cluster, and GPU path validated on target hardware; vLLM runtime tooling implemented, with target inference validation pending**
 
 The v0.1 milestone proves the smallest complete serving path on one SSH-accessible bare-metal NVIDIA GPU
 server. The platform composes Kubernetes, NVIDIA's Kubernetes integration, and vLLM rather than
@@ -28,7 +28,8 @@ flowchart LR
     Ready --> GPUOperator[NVIDIA GPU Operator]
     GPUOperator --> GPUReady[Whole nvidia.com/gpu resource]
     GPUReady --> Smoke[Temporary nvidia-smi Pod]
-    Smoke --> VLLMRuntime[vLLM runtime - planned]
+    Smoke --> Dispatcher[runtime dispatcher and committed profile]
+    Dispatcher --> VLLMRuntime[vLLM adapter - target validation pending]
 ```
 
 ```mermaid
@@ -48,6 +49,18 @@ flowchart LR
 The benchmark client sends OpenAI-compatible requests to a Kubernetes Service. The Service
 selects the single vLLM replica, which performs continuous batching and executes inference on
 the GPU. Streaming Server-Sent Events return generated content incrementally to the client.
+
+The stable `runtime-*` commands resolve a committed runtime adapter and model profile. The
+profile owns Kubernetes-generic identity, model, storage, and resource settings; the vLLM
+adapter owns engine arguments, rendering, health checks, and OpenAI-compatible smoke tests.
+This boundary keeps the public workflow stable without inventing shared abstractions before a
+second runtime provides concrete reuse requirements.
+
+The v0.1 profile deploys one BF16 Qwen2.5-7B-Instruct replica, requests one whole GPU, and
+exposes only an internal ClusterIP Service. A node-local hostPath cache survives Pod restarts,
+while the `Recreate` strategy prevents two full-GPU replicas from competing during an update.
+Runtime completion is a hard checkpoint: health, exact model discovery, non-streaming chat and
+legacy completion, and demonstrably incremental SSE must all pass before benchmarking begins.
 
 ## Telemetry path
 
@@ -76,7 +89,8 @@ multi-node topology are deferred measured extensions.
 
 ## Deferred components
 
-The Go operator and gateway, authentication, rate limiting, multi-replica routing, autoscaling,
-topology-aware placement, and multi-node distributed inference are intentionally outside the
-v0.1 architecture. They will build on the measured baseline instead of being designed in
-the absence of a working serving path.
+Additional runtime adapters, arbitrary runtime overrides, the Go operator and gateway,
+authentication, rate limiting, multi-replica routing, autoscaling, topology-aware placement,
+and multi-node distributed inference are intentionally outside the v0.1 architecture. They
+will build on the measured baseline instead of being designed in the absence of a working
+serving path.

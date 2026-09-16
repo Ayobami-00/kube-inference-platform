@@ -1,6 +1,11 @@
 """Deterministic subprocess tests for single-node cluster tooling."""
 
+# ruff: noqa: E501
+
+import hashlib
+import json
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -13,6 +18,16 @@ VALIDATE_SCRIPT = ROOT / "deploy" / "cluster" / "validate.sh"
 DESTROY_SCRIPT = ROOT / "deploy" / "destroy.sh"
 CRI_ENDPOINT = "unix:///run/containerd/containerd.sock"
 GPU_CHART_DIGEST = "sha256:23268170f1b608365ef8c15e0c0df87bff0017768e048bd9e73e41a1096299e4"
+RUNTIME_PROFILE = ROOT / "deploy" / "runtime" / "vllm" / "profiles" / "qwen2.5-7b-instruct.json"
+RUNTIME_IMAGE_DIGEST = "sha256:3e10e8189823e0f7ae4620c271bcdaaf64127ec7d0edc351591a508498b7684a"
+RUNTIME_MODEL_REVISION = "a09a35458c702b33eeacc393d103063234e8bc28"
+
+
+def runtime_profile_hash() -> str:
+    canonical = json.dumps(
+        json.loads(RUNTIME_PROFILE.read_text()), sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(f"{canonical}\n".encode()).hexdigest()
 
 
 def write_command(command_dir: Path, name: str, body: str) -> None:
@@ -46,6 +61,16 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
     packages_state = tmp_path / "packages-installed"
     network_state = tmp_path / "cni-network-present"
     firewall_state = tmp_path / "firewall-cleaned"
+
+    jq_path = shutil.which("jq")
+    sha_path = shutil.which("sha256sum") or shutil.which("shasum")
+    assert jq_path is not None
+    assert sha_path is not None
+    write_command(command_dir, "jq", f'exec "{jq_path}" "$@"')
+    if Path(sha_path).name == "shasum":
+        write_command(command_dir, "sha256sum", f'exec "{sha_path}" -a 256 "$@"')
+    else:
+        write_command(command_dir, "sha256sum", f'exec "{sha_path}" "$@"')
 
     write_command(
         command_dir,
@@ -246,7 +271,38 @@ case "$args" in
         printf '%s\\n' \
             "{\\"clientVersion\\":{\\"gitVersion\\":\\"v1.36.4\\"},\\"serverVersion\\":{\\"gitVersion\\":\\"v${KIP_TEST_SERVER_VERSION:-1.36.4}\\"}}"
         ;;
-    *'get --raw=/readyz'*) printf '%s\\n' ok ;;
+    *'get --raw=/readyz'*)
+        [ "${KIP_TEST_API_FAIL:-0}" != 1 ] || exit 1
+        printf '%s\\n' ok
+        ;;
+    *'get namespace kip-runtime -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_RUNTIME_RELEASE:-0}" = 1 ] && printf '%s' kip-runtime || exit 1
+        ;;
+    *'get namespace kip-runtime -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        [ "${KIP_TEST_RUNTIME_RELEASE:-0}" = 1 ] || exit 1
+        printf '%s' "${KIP_TEST_RUNTIME_OWNER:-kube-inference-platform}"
+        ;;
+    *'get namespace kip-runtime -o jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}'*)
+        printf '%s' "$KIP_TEST_RUNTIME_PROFILE_HASH" ;;
+    *'-n kip-runtime get deployment,service -o json')
+        if [ "${KIP_TEST_RUNTIME_EXTRA:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"Deployment","metadata":{"name":"unmanaged-runtime","labels":{}}}]}'
+        else
+            printf '%s\\n' '{"items":[{"kind":"Deployment","metadata":{"name":"vllm-qwen25-7b","labels":{"app.kubernetes.io/managed-by":"kube-inference-platform"}}},{"kind":"Service","metadata":{"name":"vllm-qwen25-7b","labels":{"app.kubernetes.io/managed-by":"kube-inference-platform"}}}]}'
+        fi
+        ;;
+    *'-n kip-runtime get deployment vllm-qwen25-7b -o jsonpath={.metadata.name}'*|*'-n kip-runtime get service vllm-qwen25-7b -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_RUNTIME_RELEASE:-0}" = 1 ] && printf '%s' vllm-qwen25-7b || exit 1
+        ;;
+    *'-n kip-runtime get deployment vllm-qwen25-7b -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*|*'-n kip-runtime get service vllm-qwen25-7b -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_RUNTIME_OWNER:-kube-inference-platform}" ;;
+    *'-n kip-runtime get deployment vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/image-digest}'*|*'-n kip-runtime get service vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/image-digest}'*)
+        printf '%s' "$KIP_TEST_RUNTIME_DIGEST" ;;
+    *'-n kip-runtime get deployment vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}'*|*'-n kip-runtime get service vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}'*)
+        printf '%s' "$KIP_TEST_RUNTIME_PROFILE_HASH" ;;
+    *'-n kip-runtime get deployment vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/model-revision}'*|*'-n kip-runtime get service vllm-qwen25-7b -o jsonpath={.metadata.annotations.kube-inference-platform/model-revision}'*)
+        printf '%s' "$KIP_TEST_RUNTIME_MODEL_REVISION" ;;
+    *'delete namespace kip-runtime '*) printf '%s\\n' runtime-deleted ;;
     *'get configmap kubeadm-config'*)
         printf '%s\\n' 'networking:' '  podSubnet: 10.244.0.0/16' \
             '  serviceSubnet: 10.96.0.0/12'
@@ -406,6 +462,9 @@ def cluster_environment(
             "KIP_TEST_FIREWALL_CAPTURE": str(fixture["firewall_capture"]),
             "KIP_TEST_CONTAINERD_PACKAGE": ("2.3.4-2~ubuntu.24.04~noble"),
             "KIP_TEST_GPU_DIGEST": GPU_CHART_DIGEST,
+            "KIP_TEST_RUNTIME_DIGEST": RUNTIME_IMAGE_DIGEST,
+            "KIP_TEST_RUNTIME_MODEL_REVISION": RUNTIME_MODEL_REVISION,
+            "KIP_TEST_RUNTIME_PROFILE_HASH": runtime_profile_hash(),
             "KIP_ETC_ROOT": str(fixture["etc_root"]),
             "KIP_RUN_ROOT": str(fixture["run_root"]),
             "KIP_VAR_ROOT": str(fixture["var_root"]),
@@ -871,6 +930,11 @@ def test_destroy_removes_owned_cluster_and_restores_host(
     nvidia_state = cluster_fixture["run_root"] / "nvidia" / "nvidia-driver.state"
     nvidia_state.parent.mkdir(parents=True)
     nvidia_state.write_text("ready\n")
+    model_cache = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "model-cache" / "vllm"
+    )
+    model_cache.mkdir(parents=True)
+    (model_cache / "model.bin").write_text("fixture\n")
     cluster_fixture["network_state"].touch()
 
     result = run_cluster_script(
@@ -878,12 +942,13 @@ def test_destroy_removes_owned_cluster_and_restores_host(
         cluster_fixture,
         KIP_CONFIRM_DESTROY="1",
         KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_RUNTIME_RELEASE="1",
         KIP_TEST_RUNTIME_MOUNTS="1",
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "8 passed" in result.stdout
-    assert "ready for a fresh host-to-GPU bootstrap" in result.stdout
+    assert "ready for a fresh host-to-runtime bootstrap" in result.stdout
     assert "/swapfile none swap sw 0 0" in fstab.read_text()
     assert "KIP_DISABLED_SWAP" not in fstab.read_text()
     assert not (cluster_fixture["etc_root"] / "kubernetes").exists()
@@ -897,9 +962,11 @@ def test_destroy_removes_owned_cluster_and_restores_host(
     assert not cilium_global.exists()
     assert not nvidia_state.exists()
     assert not cluster_fixture["network_state"].exists()
+    assert not model_cache.exists()
     assert not (cluster_fixture["var_root"] / "lib" / "kube-inference-platform").exists()
     assert "KUBE-" not in cluster_fixture["firewall_capture"].read_text()
     commands = cluster_fixture["command_log"].read_text()
+    assert "delete namespace kip-runtime" in commands
     assert "helm uninstall gpu-operator" in commands
     assert "helm uninstall cilium" not in commands
     assert "umount" in commands
@@ -1018,6 +1085,48 @@ def test_destroy_refuses_unmanaged_gpu_release(cluster_fixture: dict[str, Path])
     commands = cluster_fixture["command_log"].read_text()
     assert "helm uninstall gpu-operator" not in commands
     assert "kubeadm reset" not in commands
+
+
+def test_destroy_refuses_unmanaged_runtime(cluster_fixture: dict[str, Path]) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_RUNTIME_RELEASE="1",
+        KIP_TEST_RUNTIME_EXTRA="1",
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    commands = cluster_fixture["command_log"].read_text()
+    assert "delete namespace kip-runtime" not in commands
+    assert "kubeadm reset" not in commands
+
+
+def test_destroy_handles_unavailable_api_and_removes_runtime_cache(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    model_cache = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "model-cache" / "vllm"
+    )
+    model_cache.mkdir(parents=True)
+    (model_cache / "model.bin").write_text("fixture\n")
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_API_FAIL="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "API is unavailable" in result.stdout
+    assert not model_cache.exists()
 
 
 @pytest.mark.parametrize("confirmation", ["", "yes", "0"])

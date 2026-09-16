@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: __NAMESPACE__
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/part-of: kube-inference-platform
+    app.kubernetes.io/component: runtime
+    kube-inference-platform/runtime: vllm
+  annotations:
+    kube-inference-platform/profile: __PROFILE_NAME__
+    kube-inference-platform/profile-sha256: __PROFILE_HASH__
