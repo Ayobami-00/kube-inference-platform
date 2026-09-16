@@ -9,8 +9,9 @@ optimisation.
 > [!IMPORTANT]
 > The repository currently contains the v0.1 foundation, portable host preparation,
 > single-node Kubernetes bootstrap, and NVIDIA GPU stack tooling. These layers are tested
-> with deterministic fixtures but have not yet been validated on target hardware. vLLM
-> serving, observability, and real benchmark traffic are not yet implemented or validated.
+> with deterministic fixtures and have passed the complete host-to-CUDA path on target
+> NVIDIA A10 hardware. vLLM serving, observability, and real benchmark traffic are not yet
+> implemented or validated.
 
 ## v0.1 objective
 
@@ -275,15 +276,51 @@ GPU details remain terminal-only. Treat kubeconfig access and all registry crede
 sensitive, keep TCP 6443 restricted, and use `VERBOSE=1` only where terminal output is handled
 appropriately.
 
+## Platform teardown
+
+To return a target to the pre-cluster state for a fresh bootstrap, run:
+
+```bash
+make destroy
+```
+
+The interactive command requires typing `destroy`. For an explicitly authorized
+non-interactive run, use:
+
+```bash
+make destroy CONFIRM_DESTROY=1
+```
+
+Teardown first verifies the KIP ownership markers and pinned package versions. It then
+uninstalls the matching GPU Operator, keeps Cilium alive while `kubeadm reset` stops remaining
+Pod sandboxes, and removes Cilium namespaces, interfaces, CNI binaries, pinned BPF objects,
+and only firewall rules in `CILIUM_` or `KUBE-` chains. It then unmounts project runtime
+mounts, removes KIP cluster/runtime data and the pinned Kubernetes/containerd packages,
+restores the original `fstab`, and removes the project-owned sysctl and modules-load files. A
+matching user kubeconfig is removed; a changed kubeconfig is preserved. A project-owned
+teardown marker makes interrupted runs safely resumable.
+
+The command deliberately preserves SSH access, the operating system, kernel packages,
+inspection prerequisites installed by `host-setup`, and shared Helm/Cilium CLI binaries. It
+does not unload GPU kernel modules or reboot the target. Unrecognized ownership, an unmanaged
+GPU Operator release, or package-version drift causes teardown to stop instead of deleting
+state blindly. After a successful teardown, start again with:
+
+```bash
+make host-setup
+make cluster-bootstrap
+make gpu-install
+```
+
 ## v0.1 implementation milestones
 
 - [x] Create the repository foundation and runnable benchmark skeleton.
 - [x] Implement portable host preparation and validation tooling.
 - [x] Implement single-node Kubernetes bootstrap and CNI installation tooling.
-- [ ] Bootstrap and validate the single-node cluster on target hardware.
+- [x] Bootstrap and validate the single-node cluster on target hardware.
 - [x] Implement NVIDIA GPU Operator installation and CUDA validation tooling.
-- [ ] Validate the NVIDIA GPU stack and CUDA smoke Pod on target hardware.
-- [ ] Provision the target host and validate the host, cluster, and GPU slices.
+- [x] Validate the NVIDIA GPU stack and CUDA smoke Pod on target hardware.
+- [x] Provision the target host and validate the host, cluster, and GPU slices.
 - [ ] Deploy one vLLM model replica and expose it through a Kubernetes Service.
 - [ ] Verify non-streaming and streaming OpenAI-compatible requests.
 - [ ] Implement the asynchronous benchmark client and inference metrics.

@@ -11,5 +11,8 @@ Operational commands and their verified order remain in the repository's root `R
 | `runtime/` | The initial vLLM Deployment and Service | Streaming inference returns tokens |
 | `observability/` | Prometheus, Grafana, and DCGM integration | Runtime and GPU metrics are queryable |
 
+`deploy/destroy.sh` is the guarded, target-local inverse of the implemented cluster and GPU
+stages. It removes only recognized KIP-managed state so the bootstrap can be exercised again.
+
 The `.gitkeep` files in the remaining empty deployment directories are temporary and must be
 removed when the first real configuration file is added.

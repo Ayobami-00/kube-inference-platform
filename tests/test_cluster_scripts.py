@@ -10,7 +10,9 @@ import pytest
 ROOT = Path(__file__).parents[1]
 BOOTSTRAP_SCRIPT = ROOT / "deploy" / "cluster" / "bootstrap.sh"
 VALIDATE_SCRIPT = ROOT / "deploy" / "cluster" / "validate.sh"
+DESTROY_SCRIPT = ROOT / "deploy" / "destroy.sh"
 CRI_ENDPOINT = "unix:///run/containerd/containerd.sock"
+GPU_CHART_DIGEST = "sha256:23268170f1b608365ef8c15e0c0df87bff0017768e048bd9e73e41a1096299e4"
 
 
 def write_command(command_dir: Path, name: str, body: str) -> None:
@@ -27,8 +29,10 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
     run_root = tmp_path / "run"
     var_root = tmp_path / "var"
     bin_root = tmp_path / "bin"
+    opt_root = tmp_path / "opt"
+    bpf_root = tmp_path / "bpf"
     target_home = tmp_path / "home" / "tester"
-    for directory in (etc_root, run_root, var_root, bin_root, target_home):
+    for directory in (etc_root, run_root, var_root, bin_root, opt_root, bpf_root, target_home):
         directory.mkdir(parents=True)
     os_release = etc_root / "os-release"
     os_release.write_text(
@@ -40,6 +44,8 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
     capture_config = tmp_path / "captured-kubeadm.yaml"
     swap_disabled = tmp_path / "swap-disabled"
     packages_state = tmp_path / "packages-installed"
+    network_state = tmp_path / "cni-network-present"
+    firewall_state = tmp_path / "firewall-cleaned"
 
     write_command(
         command_dir,
@@ -97,6 +103,18 @@ case "$args" in
             printf '%s\\n' '10.244.0.0/16 via 192.0.2.2 dev eth0'
         fi
         ;;
+    'netns list')
+        [ -e "$KIP_TEST_NETWORK_STATE" ] \
+            && printf '%s\\n' 'cni-fixture (id: 1)'
+        ;;
+    'netns delete cni-fixture')
+        printf 'ip %s\\n' "$args" >> "$KIP_TEST_COMMAND_LOG"
+        rm -f "$KIP_TEST_NETWORK_STATE"
+        ;;
+    '-o link show')
+        [ -e "$KIP_TEST_NETWORK_STATE" ] \
+            && printf '%s\\n' '17: lxcabc123@if16: <BROADCAST,UP>'
+        ;;
 esac""",
     )
     write_command(
@@ -117,6 +135,38 @@ fi""",
 fi""",
     )
     write_command(command_dir, "swapoff", 'touch "$KIP_TEST_SWAP_DISABLED"')
+    write_command(
+        command_dir,
+        "mountpoint",
+        """[ "${KIP_TEST_RUNTIME_MOUNTS:-0}" = 1 ]
+case "$*" in
+    *'/run/nvidia/driver' | *'/run/cilium/cgroupv2') exit 0 ;;
+    *) exit 1 ;;
+esac""",
+    )
+    write_command(
+        command_dir,
+        "umount",
+        'printf \'umount %s\\n\' "$*" >> "$KIP_TEST_COMMAND_LOG"',
+    )
+    write_command(
+        command_dir,
+        "iptables-save",
+        """if [ ! -e "$KIP_TEST_FIREWALL_STATE" ]; then
+    printf '%s\\n' '*filter' ':INPUT ACCEPT [0:0]' ':KUBE-SERVICES - [0:0]' \
+        '-A INPUT -j KUBE-SERVICES' 'COMMIT'
+else
+    printf '%s\\n' '*filter' ':INPUT ACCEPT [0:0]' 'COMMIT'
+fi""",
+    )
+    write_command(
+        command_dir,
+        "iptables-restore",
+        """cat > "$KIP_TEST_FIREWALL_CAPTURE"
+touch "$KIP_TEST_FIREWALL_STATE"
+printf '%s\\n' iptables-restore >> "$KIP_TEST_COMMAND_LOG"
+""",
+    )
     write_command(command_dir, "lspci", "exit 0")
     write_command(command_dir, "containerd", "printf '%s\\n' 'containerd 2.3.4 test-build'")
     write_command(command_dir, "kubelet", "printf '%s\\n' 'Kubernetes v1.36.4'")
@@ -244,11 +294,17 @@ esac""",
     write_command(
         command_dir,
         "helm",
-        """if [ "$*" = 'version --short' ]; then
-    printf '%s\\n' 'v3.21.4+gtest'
-else
-    printf 'helm %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
-fi""",
+        """printf 'helm %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
+case "$*" in
+    'version --short') printf '%s\\n' 'v3.21.4+gtest' ;;
+    'status gpu-operator '*) [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] ;;
+    'get values gpu-operator '*)
+        [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] || exit 1
+        printf '%s\\n' \
+            "{\\\"kip\\\": {\\\"chartDigest\\\": \\\"$KIP_TEST_GPU_DIGEST\\\"}}"
+        ;;
+    'status cilium '*) exit 0 ;;
+esac""",
     )
     write_command(
         command_dir,
@@ -289,7 +345,13 @@ done
 cp "$input" "$output"
 """,
     )
-    for command_name in ("apt-get", "apt-mark", "modprobe", "sysctl"):
+    write_command(
+        command_dir,
+        "apt-get",
+        """printf 'apt-get %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
+case "$*" in purge*) rm -f "$KIP_TEST_PACKAGES_STATE" ;; esac""",
+    )
+    for command_name in ("apt-mark", "modprobe", "sysctl"):
         write_command(
             command_dir,
             command_name,
@@ -299,7 +361,10 @@ cp "$input" "$output"
         command_dir,
         "env",
         """printf 'env %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
-case "$*" in *'apt-get install'*) touch "$KIP_TEST_PACKAGES_STATE" ;; esac""",
+case "$*" in
+    *'apt-get install'*) touch "$KIP_TEST_PACKAGES_STATE" ;;
+    *'apt-get purge'*) rm -f "$KIP_TEST_PACKAGES_STATE" ;;
+esac""",
     )
 
     return {
@@ -308,12 +373,17 @@ case "$*" in *'apt-get install'*) touch "$KIP_TEST_PACKAGES_STATE" ;; esac""",
         "run_root": run_root,
         "var_root": var_root,
         "bin_root": bin_root,
+        "opt_root": opt_root,
+        "bpf_root": bpf_root,
         "target_home": target_home,
         "os_release": os_release,
         "command_log": command_log,
         "capture_config": capture_config,
         "swap_disabled": swap_disabled,
         "packages_state": packages_state,
+        "network_state": network_state,
+        "firewall_state": firewall_state,
+        "firewall_capture": tmp_path / "firewall-restored.txt",
     }
 
 
@@ -331,11 +401,17 @@ def cluster_environment(
             "KIP_TEST_CAPTURE_CONFIG": str(fixture["capture_config"]),
             "KIP_TEST_SWAP_DISABLED": str(fixture["swap_disabled"]),
             "KIP_TEST_PACKAGES_STATE": str(fixture["packages_state"]),
+            "KIP_TEST_NETWORK_STATE": str(fixture["network_state"]),
+            "KIP_TEST_FIREWALL_STATE": str(fixture["firewall_state"]),
+            "KIP_TEST_FIREWALL_CAPTURE": str(fixture["firewall_capture"]),
             "KIP_TEST_CONTAINERD_PACKAGE": ("2.3.4-2~ubuntu.24.04~noble"),
+            "KIP_TEST_GPU_DIGEST": GPU_CHART_DIGEST,
             "KIP_ETC_ROOT": str(fixture["etc_root"]),
             "KIP_RUN_ROOT": str(fixture["run_root"]),
             "KIP_VAR_ROOT": str(fixture["var_root"]),
             "KIP_USR_LOCAL_BIN": str(fixture["bin_root"]),
+            "KIP_OPT_ROOT": str(fixture["opt_root"]),
+            "KIP_SYS_FS_BPF_ROOT": str(fixture["bpf_root"]),
             "KIP_OS_RELEASE_FILE": str(fixture["os_release"]),
             "KIP_TARGET_USER": "tester",
             "KIP_TARGET_HOME": str(fixture["target_home"]),
@@ -771,3 +847,188 @@ def test_invalid_make_variable_exits_two(cluster_fixture: dict[str, Path]) -> No
 
     assert result.returncode == 2
     assert "VERBOSE must be 0 or 1" in result.stderr
+
+
+def test_destroy_removes_owned_cluster_and_restores_host(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    fstab = cluster_fixture["etc_root"] / "fstab"
+    fstab.write_text("UUID=root / ext4 defaults 0 1\n/swapfile none swap sw 0 0\n")
+    bootstrap = run_cluster_script(
+        BOOTSTRAP_SCRIPT,
+        cluster_fixture,
+        KIP_TEST_SWAP_SOURCE="/swapfile",
+    )
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    cni_binary = cluster_fixture["opt_root"] / "cni" / "bin" / "cilium-cni"
+    cni_binary.parent.mkdir(parents=True)
+    cni_binary.write_text("fixture\n")
+    cilium_bpf = cluster_fixture["bpf_root"] / "cilium" / "endpoints"
+    cilium_bpf.mkdir(parents=True)
+    cilium_global = cluster_fixture["bpf_root"] / "tc" / "globals" / "cilium_test"
+    cilium_global.parent.mkdir(parents=True)
+    cilium_global.write_text("fixture\n")
+    nvidia_state = cluster_fixture["run_root"] / "nvidia" / "nvidia-driver.state"
+    nvidia_state.parent.mkdir(parents=True)
+    nvidia_state.write_text("ready\n")
+    cluster_fixture["network_state"].touch()
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_RUNTIME_MOUNTS="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "8 passed" in result.stdout
+    assert "ready for a fresh host-to-GPU bootstrap" in result.stdout
+    assert "/swapfile none swap sw 0 0" in fstab.read_text()
+    assert "KIP_DISABLED_SWAP" not in fstab.read_text()
+    assert not (cluster_fixture["etc_root"] / "kubernetes").exists()
+    assert not (cluster_fixture["etc_root"] / "containerd").exists()
+    assert not (
+        cluster_fixture["etc_root"] / "sysctl.d" / "99-kube-inference-platform.conf"
+    ).exists()
+    assert not (cluster_fixture["target_home"] / ".kube" / "config").exists()
+    assert not cni_binary.exists()
+    assert not cilium_bpf.exists()
+    assert not cilium_global.exists()
+    assert not nvidia_state.exists()
+    assert not cluster_fixture["network_state"].exists()
+    assert not (cluster_fixture["var_root"] / "lib" / "kube-inference-platform").exists()
+    assert "KUBE-" not in cluster_fixture["firewall_capture"].read_text()
+    commands = cluster_fixture["command_log"].read_text()
+    assert "helm uninstall gpu-operator" in commands
+    assert "helm uninstall cilium" not in commands
+    assert "umount" in commands
+    assert "/run/nvidia/driver" in commands
+    assert "/run/cilium/cgroupv2" in commands
+    assert "ip netns delete cni-fixture" in commands
+    assert "iptables-restore" in commands
+    assert f"kubeadm reset --force --cri-socket {CRI_ENDPOINT}" in commands
+    assert (
+        "apt-mark unhold containerd.io kubelet kubeadm kubectl cri-tools kubernetes-cni" in commands
+    )
+    assert (
+        "apt-get purge -y containerd.io kubelet kubeadm kubectl cri-tools kubernetes-cni"
+        in commands
+    )
+
+
+def test_destroy_is_idempotent(cluster_fixture: dict[str, Path]) -> None:
+    first = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert first.returncode == 0, first.stdout + first.stderr
+    destroyed = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+    )
+    assert destroyed.returncode == 0, destroyed.stdout + destroyed.stderr
+
+    repeated = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+    )
+
+    assert repeated.returncode == 0
+    assert "nothing to remove" in repeated.stdout
+
+
+def test_destroy_resumes_from_private_teardown_marker(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    state_dir = cluster_fixture["var_root"] / "lib" / "kube-inference-platform"
+    state_dir.mkdir(parents=True)
+    (state_dir / "destroying").touch()
+    nvidia_state = cluster_fixture["run_root"] / "nvidia" / "nvidia-driver.state"
+    nvidia_state.parent.mkdir(parents=True)
+    nvidia_state.write_text("ready\n")
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not state_dir.exists()
+    assert not nvidia_state.exists()
+    assert "8 passed" in result.stdout
+
+
+def test_non_root_destroy_uses_sudo_for_protected_state(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_EUID="1000",
+        KIP_TEST_GPU_RELEASE="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = cluster_fixture["command_log"].read_text()
+    assert "sudo helm get values gpu-operator" in commands
+    assert "sudo cmp -s" in commands
+    assert f"sudo kubeadm reset --force --cri-socket {CRI_ENDPOINT}" in commands
+
+
+def test_destroy_refuses_unmanaged_cluster_state(cluster_fixture: dict[str, Path]) -> None:
+    kubernetes_dir = cluster_fixture["etc_root"] / "kubernetes"
+    kubernetes_dir.mkdir()
+    (kubernetes_dir / "admin.conf").write_text("unmanaged\n")
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+    )
+
+    assert result.returncode == 1
+    assert "ownership is unrecognized" in result.stdout
+    commands = (
+        cluster_fixture["command_log"].read_text()
+        if cluster_fixture["command_log"].exists()
+        else ""
+    )
+    assert "kubeadm reset" not in commands
+
+
+def test_destroy_refuses_unmanaged_gpu_release(cluster_fixture: dict[str, Path]) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_GPU_DIGEST="sha256:unmanaged",
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    commands = cluster_fixture["command_log"].read_text()
+    assert "helm uninstall gpu-operator" not in commands
+    assert "kubeadm reset" not in commands
+
+
+@pytest.mark.parametrize("confirmation", ["", "yes", "0"])
+def test_destroy_requires_explicit_noninteractive_confirmation(
+    cluster_fixture: dict[str, Path], confirmation: str
+) -> None:
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY=confirmation,
+    )
+
+    assert result.returncode == 2
+    assert "destroy" in result.stderr.lower()

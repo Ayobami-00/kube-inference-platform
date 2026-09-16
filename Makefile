@@ -4,6 +4,7 @@ UV ?= uv
 VERBOSE ?= 0
 GPU_REQUIRED ?= 0
 GPU_DRIVER_MODE ?=
+CONFIRM_DESTROY ?=
 NODE_IP ?=
 POD_CIDR ?=
 SERVICE_CIDR ?=
@@ -11,7 +12,7 @@ DEPLOY_SCRIPTS := $(shell find deploy -type f -name '*.sh' -print | sort)
 
 .PHONY: help setup lint format-check deploy-script-check host-script-check test check \
 	bench-help host-check host-setup cluster-check cluster-bootstrap gpu-check gpu-install \
-	gpu-smoke
+	gpu-smoke destroy
 
 help:
 	@echo "Available targets:"
@@ -30,6 +31,7 @@ help:
 	@echo "  gpu-check      Validate the local NVIDIA GPU stack without mutation"
 	@echo "  gpu-install    Install and validate the NVIDIA GPU Operator"
 	@echo "  gpu-smoke      Run a temporary in-cluster nvidia-smi smoke test"
+	@echo "  destroy        Remove the KIP-managed GPU and Kubernetes stack"
 
 setup:
 	$(UV) sync
@@ -77,3 +79,7 @@ gpu-install:
 gpu-smoke:
 	@KIP_VERBOSE="$(VERBOSE)" KIP_GPU_DRIVER_MODE="$(GPU_DRIVER_MODE)" \
 		./deploy/gpu/smoke.sh
+
+destroy:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_CONFIRM_DESTROY="$(CONFIRM_DESTROY)" \
+		./deploy/destroy.sh
