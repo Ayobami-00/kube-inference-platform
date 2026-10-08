@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "name": "lambda-a10-public",
+  "currency": "USD",
+  "nodeHourlyRateUsd": 1.29,
+  "provider": "Lambda On-Demand Cloud",
+  "machineType": "1x NVIDIA A10 24 GB, 30 vCPU, 226 GiB RAM, 1.3 TiB SSD",
+  "region": "public-list-price-region-independent",
+  "source": "https://lambda.ai/pricing",
+  "effectiveFrom": "2026-09-22",
+  "physicalGpuCount": 1,
+  "powerIncludedInRate": true
+}

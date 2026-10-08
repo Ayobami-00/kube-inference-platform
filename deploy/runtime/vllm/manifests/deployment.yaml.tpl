@@ -9,12 +9,22 @@ metadata:
     app.kubernetes.io/component: runtime
     app.kubernetes.io/name: vllm
     app.kubernetes.io/instance: __PROFILE_NAME__
+    kube-inference-platform.io/runtime: vllm
+    kube-inference-platform.io/deployment: __RESOURCE_NAME__
+    kube-inference-platform.io/model-profile: __PROFILE_NAME__
+    kube-inference-platform.io/served-model: __SERVED_MODEL_NAME__
+    kube-inference-platform.io/model-revision: __MODEL_REVISION__
+    kube-inference-platform.io/worker-role: combined
+    kube-inference-platform.io/replica: "0"
+    kube-inference-platform.io/pipeline-rank: "0"
+    kube-inference-platform.io/tensor-rank: "0"
   annotations:
     kube-inference-platform/runtime-version: __VLLM_VERSION__
     kube-inference-platform/profile: __PROFILE_NAME__
     kube-inference-platform/profile-sha256: __PROFILE_HASH__
     kube-inference-platform/model-revision: __MODEL_REVISION__
     kube-inference-platform/image-digest: __IMAGE_DIGEST__
+    kube-inference-platform.io/model-id: __MODEL_ID__
 spec:
   replicas: __REPLICAS__
   strategy:
@@ -33,8 +43,18 @@ spec:
         app.kubernetes.io/component: runtime
         app.kubernetes.io/name: vllm
         app.kubernetes.io/instance: __PROFILE_NAME__
+        kube-inference-platform.io/runtime: vllm
+        kube-inference-platform.io/deployment: __RESOURCE_NAME__
+        kube-inference-platform.io/model-profile: __PROFILE_NAME__
+        kube-inference-platform.io/served-model: __SERVED_MODEL_NAME__
+        kube-inference-platform.io/model-revision: __MODEL_REVISION__
+        kube-inference-platform.io/worker-role: combined
+        kube-inference-platform.io/replica: "0"
+        kube-inference-platform.io/pipeline-rank: "0"
+        kube-inference-platform.io/tensor-rank: "0"
       annotations:
         kube-inference-platform/profile-sha256: __PROFILE_HASH__
+        kube-inference-platform.io/model-id: __MODEL_ID__
     spec:
       enableServiceLinks: false
       terminationGracePeriodSeconds: 120

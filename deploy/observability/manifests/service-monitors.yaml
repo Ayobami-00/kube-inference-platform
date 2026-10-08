@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kip-cilium-agent-metrics
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    k8s-app: cilium
+spec:
+  clusterIP: None
+  selector:
+    k8s-app: cilium
+  ports:
+    - name: prometheus
+      port: 9962
+      targetPort: prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kip-cilium-operator-metrics
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    io.cilium/app: operator
+spec:
+  clusterIP: None
+  selector:
+    io.cilium/app: operator
+  ports:
+    - name: prometheus
+      port: 9963
+      targetPort: 9963
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-vllm
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kip-runtime]
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: kube-inference-platform
+      app.kubernetes.io/component: runtime
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s
+      honorLabels: true
+      relabelings:
+        - action: replace
+          targetLabel: cluster
+          replacement: kip-v01
+        - action: replace
+          sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_deployment]
+          targetLabel: deployment
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_runtime]
+          targetLabel: runtime
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_model_profile]
+          targetLabel: model_profile
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_served_model]
+          targetLabel: model_name
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_model_revision]
+          targetLabel: model_revision
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_worker_role]
+          targetLabel: worker_role
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_replica]
+          targetLabel: replica
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_pipeline_rank]
+          targetLabel: pipeline_rank
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_tensor_rank]
+          targetLabel: tensor_rank
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-dcgm-exporter
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [gpu-operator]
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
+  endpoints:
+    - port: gpu-metrics
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s
+      honorLabels: true
+      relabelings:
+        - action: replace
+          targetLabel: cluster
+          replacement: kip-v01
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - action: replace
+          sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-cilium-agent
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kube-system]
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  endpoints:
+    - port: prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          targetLabel: cluster
+          replacement: kip-v01
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-cilium-operator
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kube-system]
+  selector:
+    matchLabels:
+      io.cilium/app: operator
+  endpoints:
+    - port: prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          targetLabel: cluster
+          replacement: kip-v01

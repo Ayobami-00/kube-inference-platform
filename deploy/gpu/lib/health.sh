@@ -11,7 +11,7 @@ kip_gpu_cluster_policy_ready() {
 }
 
 kip_gpu_operand_pods_healthy() {
-    local output required pattern
+    local dcgm_state output required pattern
 
     output=$(kip_kubectl -n "$KIP_GPU_NAMESPACE" get pods \
         -o 'jsonpath={range .items[*]}{.metadata.name}|{.status.phase}|{range .status.containerStatuses[*]}{.ready}:{.state.waiting.reason},{end}{"\n"}{end}' \
@@ -26,6 +26,10 @@ kip_gpu_operand_pods_healthy() {
     ' || return 1
 
     required='gpu-operator node-feature-discovery nvidia-container-toolkit nvidia-device-plugin gpu-feature-discovery nvidia-operator-validator'
+    dcgm_state=$(kip_gpu_dcgm_exporter_state) || return 1
+    if [ "$dcgm_state" = true ]; then
+        required="$required nvidia-dcgm-exporter"
+    fi
     if [ "$KIP_GPU_DRIVER_MODE" = operator ]; then
         required="$required nvidia-driver"
     fi

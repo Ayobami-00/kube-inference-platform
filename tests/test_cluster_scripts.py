@@ -30,6 +30,11 @@ def runtime_profile_hash() -> str:
     return hashlib.sha256(f"{canonical}\n".encode()).hexdigest()
 
 
+def mark_owned(path: Path, content: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".kip-managed-v1").write_text(f"{content}\n")
+
+
 def write_command(command_dir: Path, name: str, body: str) -> None:
     command = command_dir / name
     command.write_text(f"#!/bin/sh\n{body}\n")
@@ -62,6 +67,7 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
     network_state = tmp_path / "cni-network-present"
     firewall_state = tmp_path / "firewall-cleaned"
     bpf_busy_state = tmp_path / "bpf-busy-once"
+    benchmark_work_dir = tmp_path / "benchmark-work"
 
     jq_path = shutil.which("jq")
     sha_path = shutil.which("sha256sum") or shutil.which("shasum")
@@ -282,6 +288,78 @@ case "$args" in
         [ "${KIP_TEST_API_FAIL:-0}" != 1 ] || exit 1
         printf '%s\\n' ok
         ;;
+    *'api-resources --verbs=list --namespaced=true -o name'*)
+        printf '%s\\n' configmaps
+        ;;
+    *'get namespaces -o json'*)
+        if [ "${KIP_TEST_FOREIGN_NAMESPACE:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"metadata":{"name":"default"}},{"metadata":{"name":"kube-system"}},{"metadata":{"name":"user-application"}}]}'
+        else
+            printf '%s\\n' '{"items":[{"metadata":{"name":"default"}},{"metadata":{"name":"kube-system"}},{"metadata":{"name":"kube-public"}},{"metadata":{"name":"kube-node-lease"}}]}'
+        fi
+        ;;
+    *'get deployments,statefulsets,daemonsets,jobs,cronjobs,pods --all-namespaces -o json'*)
+        if [ "${KIP_TEST_FOREIGN_WORKLOAD:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"metadata":{"namespace":"default","name":"foreign-app"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'get persistentvolumes -o json'*)
+        if [ "${KIP_TEST_FOREIGN_PV:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"metadata":{"name":"foreign-pv","labels":{}}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'get customresourcedefinition '*' -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_FOREIGN_MONITORING_CR:-0}" = 1 ] || exit 1
+        previous=''
+        for argument in "$@"; do
+            if [ "$previous" = customresourcedefinition ]; then
+                printf '%s' "$argument"
+                break
+            fi
+            previous=$argument
+        done
+        ;;
+    *'get customresourcedefinition '*' -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' kube-inference-platform
+        ;;
+    *'get customresourcedefinition '*' -o jsonpath={.metadata.annotations.kube-inference-platform\\.io/chart-digest}'*)
+        printf '%s' 'sha256:0032315f2580f488ce433ff9d18de24ce631857ff7f1d73693171eeeb7affd52'
+        ;;
+    *'get '*.monitoring.coreos.com' --all-namespaces -o json'*)
+        printf '%s\\n' '{"items":[{"metadata":{"namespace":"foreign-observability","name":"foreign-monitor","labels":{"app.kubernetes.io/managed-by":"someone-else"}}}]}'
+        ;;
+    *'-n kip-benchmark get configmaps -o json'*)
+        if [ "${KIP_TEST_BENCHMARK_NAMESPACE_EXTRA:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n kip-observability get configmaps -o json'*)
+        if [ "${KIP_TEST_OBSERVABILITY_NAMESPACE_EXTRA:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n kip-runtime get configmaps -o json'*)
+        if [ "${KIP_TEST_RUNTIME_NAMESPACE_EXTRA:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n gpu-operator get configmaps -o json'*)
+        if [ "${KIP_TEST_GPU_NAMESPACE_EXTRA:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
     *'get namespace kip-runtime -o jsonpath={.metadata.name}'*)
         [ "${KIP_TEST_RUNTIME_RELEASE:-0}" = 1 ] && printf '%s' kip-runtime || exit 1
         ;;
@@ -291,6 +369,49 @@ case "$args" in
         ;;
     *'get namespace kip-runtime -o jsonpath={.metadata.annotations.kube-inference-platform/profile-sha256}'*)
         printf '%s' "$KIP_TEST_RUNTIME_PROFILE_HASH" ;;
+    *'get namespace kip-benchmark -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_BENCHMARK_RELEASE:-0}" = 1 ] && printf '%s' kip-benchmark || exit 1
+        ;;
+    *'get namespace kip-benchmark -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_BENCHMARK_OWNER:-kube-inference-platform}" ;;
+    *'-n kip-benchmark get serviceaccount kip-benchmark -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_BENCHMARK_RELEASE:-0}" = 1 ] && printf '%s' kip-benchmark || exit 1
+        ;;
+    *'-n kip-benchmark get serviceaccount kip-benchmark -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_BENCHMARK_OWNER:-kube-inference-platform}" ;;
+    *'-n kip-benchmark get persistentvolumeclaim kip-benchmark-results -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_BENCHMARK_RELEASE:-0}" = 1 ] && printf '%s' kip-benchmark-results || exit 1
+        ;;
+    *'-n kip-benchmark get persistentvolumeclaim kip-benchmark-results -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_BENCHMARK_OWNER:-kube-inference-platform}" ;;
+    *'get persistentvolume kip-benchmark-results -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_BENCHMARK_RELEASE:-0}" = 1 ] && printf '%s' kip-benchmark-results || exit 1
+        ;;
+    *'get persistentvolume kip-benchmark-results -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_BENCHMARK_OWNER:-kube-inference-platform}" ;;
+    *'get namespace kip-observability -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] && printf '%s' kip-observability || exit 1
+        ;;
+    *'get namespace kip-observability -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_OBSERVABILITY_OWNER:-kube-inference-platform}" ;;
+    *'get namespace gpu-operator -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] && printf '%s' gpu-operator || exit 1
+        ;;
+    *'get storageclass kip-local-static -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] && printf '%s' kip-local-static || exit 1
+        ;;
+    *'get storageclass kip-local-static -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_OBSERVABILITY_VOLUME_OWNER:-kube-inference-platform}" ;;
+    *'get persistentvolume kip-prometheus -o jsonpath={.metadata.name}'*|*'get persistentvolume kip-alertmanager -o jsonpath={.metadata.name}'*|*'get persistentvolume kip-grafana -o jsonpath={.metadata.name}'*)
+        [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] || exit 1
+        case "$args" in
+            *kip-prometheus*) printf '%s' kip-prometheus ;;
+            *kip-alertmanager*) printf '%s' kip-alertmanager ;;
+            *kip-grafana*) printf '%s' kip-grafana ;;
+        esac
+        ;;
+    *'get persistentvolume kip-prometheus -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*|*'get persistentvolume kip-alertmanager -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*|*'get persistentvolume kip-grafana -o jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}'*)
+        printf '%s' "${KIP_TEST_OBSERVABILITY_VOLUME_OWNER:-kube-inference-platform}" ;;
     *'-n kip-runtime get deployment,service -o json')
         if [ "${KIP_TEST_RUNTIME_EXTRA:-0}" = 1 ]; then
             printf '%s\\n' '{"items":[{"kind":"Deployment","metadata":{"name":"unmanaged-runtime","labels":{}}}]}'
@@ -360,11 +481,41 @@ esac""",
         """printf 'helm %s\\n' "$*" >> "$KIP_TEST_COMMAND_LOG"
 case "$*" in
     'version --short') printf '%s\\n' 'v3.21.4+gtest' ;;
+    'status gpu-operator '*'--output json'*)
+        [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] || exit 1
+        printf '%s\\n' '{"info":{"status":"deployed"}}'
+        ;;
     'status gpu-operator '*) [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] ;;
+    'status kip-monitoring '*) [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] ;;
+    'status kip-opencost '*) [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] ;;
     'get values gpu-operator '*)
         [ "${KIP_TEST_GPU_RELEASE:-0}" = 1 ] || exit 1
+        toolkit_enabled=true
+        [ "${KIP_TEST_GPU_VALUE_DRIFT:-0}" != 1 ] || toolkit_enabled=false
         printf '%s\\n' \
-            "{\\\"kip\\\": {\\\"chartDigest\\\": \\\"$KIP_TEST_GPU_DIGEST\\\"}}"
+            "{\\\"clusterPolicy\\\":{\\\"deployCR\\\":true},\\\"gpuCluster\\\":{\\\"deployCR\\\":false},\\\"psa\\\":{\\\"enabled\\\":true},\\\"nfd\\\":{\\\"enabled\\\":true},\\\"cdi\\\":{\\\"enabled\\\":true,\\\"nriPluginEnabled\\\":false},\\\"sandboxWorkloads\\\":{},\\\"driver\\\":{\\\"enabled\\\":true,\\\"version\\\":\\\"595.91.07\\\"},\\\"toolkit\\\":{\\\"enabled\\\":$toolkit_enabled,\\\"env\\\":[{\\\"name\\\":\\\"CONTAINERD_CONFIG\\\",\\\"value\\\":\\\"/etc/containerd/config.toml\\\"},{\\\"name\\\":\\\"CONTAINERD_SOCKET\\\",\\\"value\\\":\\\"/run/containerd/containerd.sock\\\"},{\\\"name\\\":\\\"RUNTIME_CONFIG_SOURCE\\\",\\\"value\\\":\\\"file=/etc/containerd/config.toml\\\"},{\\\"name\\\":\\\"RUNTIME_DROP_IN_CONFIG\\\",\\\"value\\\":\\\"/etc/containerd/conf.d/99-nvidia.toml\\\"}]},\\\"devicePlugin\\\":{\\\"enabled\\\":true},\\\"gfd\\\":{},\\\"dcgm\\\":{\\\"enabled\\\":false},\\\"dcgmExporter\\\":{\\\"enabled\\\":true,\\\"repository\\\":\\\"nvcr.io/nvidia/k8s\\\",\\\"image\\\":\\\"dcgm-exporter\\\",\\\"version\\\":\\\"4.6.0-4.8.3-distroless@sha256:b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a\\\",\\\"serviceMonitor\\\":{\\\"enabled\\\":false},\\\"config\\\":{\\\"name\\\":\\\"kip-dcgm-metrics\\\"},\\\"env\\\":[{\\\"name\\\":\\\"DCGM_EXPORTER_INTERVAL\\\",\\\"value\\\":\\\"1000\\\"},{\\\"name\\\":\\\"DCGM_EXPORTER_COLLECTORS\\\",\\\"value\\\":\\\"/etc/dcgm-exporter/dcgm-metrics.csv\\\"}]},\\\"mig\\\":{\\\"strategy\\\":\\\"none\\\"},\\\"migManager\\\":{\\\"enabled\\\":false},\\\"gds\\\":{},\\\"gdrcopy\\\":{},\\\"vgpuManager\\\":{},\\\"vgpuDeviceManager\\\":{},\\\"vfioManager\\\":{},\\\"kataManager\\\":{},\\\"sandboxDevicePlugin\\\":{},\\\"kataSandboxDevicePlugin\\\":{},\\\"ccManager\\\":{},\\\"kip\\\":{\\\"driverMode\\\":\\\"operator\\\",\\\"chartDigest\\\":\\\"$KIP_TEST_GPU_DIGEST\\\",\\\"dcgmExporterEnabled\\\":true}}"
+        ;;
+    'list --namespace gpu-operator --filter ^gpu-operator$ --output json '*)
+        printf '[{"name":"gpu-operator","namespace":"gpu-operator","chart":"gpu-operator-%s"}]\\n' \
+            "${KIP_TEST_GPU_CHART_VERSION:-v26.7.0}"
+        ;;
+    'get values kip-monitoring '*)
+        [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] || exit 1
+        printf '%s\\n' \
+            '{\"kip\":{\"managedBy\":\"kube-inference-platform\",\"chartDigest\":\"sha256:0032315f2580f488ce433ff9d18de24ce631857ff7f1d73693171eeeb7affd52\"}}'
+        ;;
+    'get values kip-opencost '*)
+        [ "${KIP_TEST_OBSERVABILITY_RELEASE:-0}" = 1 ] || exit 1
+        printf '%s\\n' \
+            '{\"kip\":{\"managedBy\":\"kube-inference-platform\",\"chartDigest\":\"sha256:534e846fc11b8e7e9967dd07fe808e552395a0985457f0cec6e0715d6c177bbc\"}}'
+        ;;
+    'list --namespace kip-observability --filter ^kip-monitoring$ --output json '*)
+        printf '[{\"name\":\"kip-monitoring\",\"namespace\":\"kip-observability\",\"chart\":\"kube-prometheus-stack-%s\"}]\\n' \
+            "${KIP_TEST_MONITORING_CHART_VERSION:-91.4.0}"
+        ;;
+    'list --namespace kip-observability --filter ^kip-opencost$ --output json '*)
+        printf '[{\"name\":\"kip-opencost\",\"namespace\":\"kip-observability\",\"chart\":\"opencost-%s\"}]\\n' \
+            "${KIP_TEST_OPENCOST_CHART_VERSION:-2.5.30}"
         ;;
     'status cilium '*) exit 0 ;;
 esac""",
@@ -447,6 +598,7 @@ esac""",
         "network_state": network_state,
         "firewall_state": firewall_state,
         "bpf_busy_state": bpf_busy_state,
+        "benchmark_work_dir": benchmark_work_dir,
         "firewall_capture": tmp_path / "firewall-restored.txt",
     }
 
@@ -483,6 +635,7 @@ def cluster_environment(
             "KIP_OS_RELEASE_FILE": str(fixture["os_release"]),
             "KIP_TARGET_USER": "tester",
             "KIP_TARGET_HOME": str(fixture["target_home"]),
+            "KIP_BENCHMARK_WORK_DIR": str(fixture["benchmark_work_dir"]),
             "NO_COLOR": "1",
         }
     )
@@ -534,6 +687,46 @@ def test_bootstrap_maps_containerd_package_to_ubuntu_release(
     assert f"containerd.io={package_version}" in commands
     assert "docker-ce" not in commands
     assert "apt-get upgrade" not in commands
+
+
+def test_bootstrap_reuses_provider_docker_repository_without_signed_by_conflict(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    source_dir = cluster_fixture["etc_root"] / "apt" / "sources.list.d"
+    source_dir.mkdir(parents=True)
+    provider_source = source_dir / "docker.list"
+    provider_source.write_text(
+        "deb [arch=amd64 signed-by=/etc/apt/cloud-init.gpg.d/docker.gpg] "
+        "https://download.docker.com/linux/ubuntu noble stable\n"
+    )
+    partial_kip_source = source_dir / "docker.sources"
+
+    result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert provider_source.exists()
+    assert not partial_kip_source.exists()
+    commands = cluster_fixture["command_log"].read_text()
+    assert "download.docker.com/linux/ubuntu/gpg" not in commands
+
+
+def test_bootstrap_refuses_unknown_duplicate_docker_source(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    source_dir = cluster_fixture["etc_root"] / "apt" / "sources.list.d"
+    source_dir.mkdir(parents=True)
+    (source_dir / "docker.list").write_text(
+        "deb [arch=amd64 signed-by=/provider/key.gpg] "
+        "https://download.docker.com/linux/ubuntu noble stable\n"
+    )
+    (source_dir / "docker.sources").write_text(
+        "URIs: https://download.docker.com/linux/ubuntu\nSigned-By: /unknown/key.gpg\n"
+    )
+
+    result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+
+    assert result.returncode == 1
+    assert "apt-get update" not in cluster_fixture["command_log"].read_text()
 
 
 def test_bootstrap_renders_runtime_and_kubeadm_configuration(
@@ -944,7 +1137,22 @@ def test_destroy_removes_owned_cluster_and_restores_host(
         cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "model-cache" / "vllm"
     )
     model_cache.mkdir(parents=True)
+    mark_owned(model_cache.parent, "kube-inference-platform model cache v1")
     (model_cache / "model.bin").write_text("fixture\n")
+    benchmark_results = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "benchmark-results"
+    )
+    benchmark_results.mkdir(parents=True)
+    mark_owned(benchmark_results, "kube-inference-platform benchmark results v1")
+    (benchmark_results / "raw.json").write_text("fixture\n")
+    observability_state = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "observability"
+    )
+    observability_state.mkdir(parents=True)
+    mark_owned(observability_state, "kube-inference-platform observability storage v1")
+    (observability_state / "prometheus.db").write_text("fixture\n")
+    cluster_fixture["benchmark_work_dir"].mkdir()
+    (cluster_fixture["benchmark_work_dir"] / "trace.json").write_text("fixture\n")
     cluster_fixture["network_state"].touch()
 
     result = run_cluster_script(
@@ -953,12 +1161,14 @@ def test_destroy_removes_owned_cluster_and_restores_host(
         KIP_CONFIRM_DESTROY="1",
         KIP_TEST_GPU_RELEASE="1",
         KIP_TEST_RUNTIME_RELEASE="1",
+        KIP_TEST_BENCHMARK_RELEASE="1",
+        KIP_TEST_OBSERVABILITY_RELEASE="1",
         KIP_TEST_RUNTIME_MOUNTS="1",
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "8 passed" in result.stdout
-    assert "ready for a fresh host-to-runtime bootstrap" in result.stdout
+    assert "ready for a fresh complete v0.1 bootstrap" in result.stdout
     assert "/swapfile none swap sw 0 0" in fstab.read_text()
     assert "KIP_DISABLED_SWAP" not in fstab.read_text()
     assert not (cluster_fixture["etc_root"] / "kubernetes").exists()
@@ -973,10 +1183,17 @@ def test_destroy_removes_owned_cluster_and_restores_host(
     assert not nvidia_state.exists()
     assert not cluster_fixture["network_state"].exists()
     assert not model_cache.exists()
+    assert not benchmark_results.exists()
+    assert not observability_state.exists()
+    assert not cluster_fixture["benchmark_work_dir"].exists()
     assert not (cluster_fixture["var_root"] / "lib" / "kube-inference-platform").exists()
     assert "KUBE-" not in cluster_fixture["firewall_capture"].read_text()
     commands = cluster_fixture["command_log"].read_text()
     assert "delete namespace kip-runtime" in commands
+    assert "delete namespace kip-benchmark" in commands
+    assert "helm uninstall kip-opencost" in commands
+    assert "helm uninstall kip-monitoring" in commands
+    assert "delete namespace kip-observability" in commands
     assert "helm uninstall gpu-operator" in commands
     assert "helm uninstall cilium" not in commands
     assert "umount" in commands
@@ -991,6 +1208,15 @@ def test_destroy_removes_owned_cluster_and_restores_host(
     assert (
         "apt-get purge -y containerd.io kubelet kubeadm kubectl cri-tools kubernetes-cni"
         in commands
+    )
+    assert commands.index("delete namespace kip-benchmark") < commands.index(
+        "helm uninstall kip-opencost"
+    )
+    assert commands.index("helm uninstall kip-monitoring") < commands.index(
+        "delete namespace kip-runtime"
+    )
+    assert commands.index("delete namespace kip-runtime") < commands.index(
+        "helm uninstall gpu-operator"
     )
 
 
@@ -1119,6 +1345,24 @@ def test_destroy_refuses_unmanaged_gpu_release(cluster_fixture: dict[str, Path])
     assert "kubeadm reset" not in commands
 
 
+def test_destroy_refuses_value_drift_in_gpu_release(cluster_fixture: dict[str, Path]) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_GPU_VALUE_DRIFT="1",
+    )
+
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "helm uninstall gpu-operator" not in commands
+    assert "kubeadm reset" not in commands
+
+
 def test_destroy_refuses_unmanaged_runtime(cluster_fixture: dict[str, Path]) -> None:
     bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
     assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
@@ -1138,6 +1382,163 @@ def test_destroy_refuses_unmanaged_runtime(cluster_fixture: dict[str, Path]) -> 
     assert "kubeadm reset" not in commands
 
 
+def test_destroy_refuses_unmanaged_benchmark_namespace(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_BENCHMARK_RELEASE="1",
+        KIP_TEST_BENCHMARK_OWNER="someone-else",
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    commands = cluster_fixture["command_log"].read_text()
+    assert "delete namespace kip-benchmark" not in commands
+    assert "kubeadm reset" not in commands
+
+
+def test_destroy_refuses_foreign_object_in_managed_namespace(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_BENCHMARK_RELEASE="1",
+        KIP_TEST_BENCHMARK_NAMESPACE_EXTRA="1",
+    )
+
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "delete namespace kip-benchmark" not in commands
+    assert "kubeadm reset" not in commands
+
+
+@pytest.mark.parametrize("directory", ["benchmark-results", "observability", "model-cache"])
+def test_destroy_refuses_unmarked_project_host_storage(
+    cluster_fixture: dict[str, Path], directory: str
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    storage = cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / directory
+    storage.mkdir(parents=True)
+    (storage / "foreign-data").write_text("preserve\n")
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+    )
+
+    assert result.returncode == 1
+    assert (storage / "foreign-data").read_text() == "preserve\n"
+    commands = cluster_fixture["command_log"].read_text()
+    assert "kubeadm reset" not in commands
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"KIP_TEST_OBSERVABILITY_OWNER": "someone-else"},
+        {"KIP_TEST_MONITORING_CHART_VERSION": "0.0.0-drifted"},
+        {"KIP_TEST_OBSERVABILITY_VOLUME_OWNER": "someone-else"},
+    ],
+)
+def test_destroy_refuses_unmanaged_observability_state(
+    cluster_fixture: dict[str, Path], overrides: dict[str, str]
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_OBSERVABILITY_RELEASE="1",
+        **overrides,
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    commands = cluster_fixture["command_log"].read_text()
+    assert "helm uninstall kip-opencost" not in commands
+    assert "delete namespace kip-observability" not in commands
+    assert "kubeadm reset" not in commands
+
+
+def test_destroy_preflights_every_layer_before_first_deletion(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_BENCHMARK_RELEASE="1",
+        KIP_TEST_OBSERVABILITY_RELEASE="1",
+        KIP_TEST_OBSERVABILITY_OWNER="someone-else",
+    )
+
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "delete namespace kip-benchmark" not in commands
+    assert "helm uninstall kip-opencost" not in commands
+    assert "kubeadm reset" not in commands
+
+
+@pytest.mark.parametrize(
+    "override",
+    ["KIP_TEST_FOREIGN_NAMESPACE", "KIP_TEST_FOREIGN_WORKLOAD", "KIP_TEST_FOREIGN_PV"],
+)
+def test_destroy_refuses_foreign_cluster_state_before_mutation(
+    cluster_fixture: dict[str, Path], override: str
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        **{override: "1"},
+    )
+
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "kubeadm reset" not in commands
+    assert "delete namespace" not in commands
+
+
+def test_destroy_refuses_foreign_monitoring_custom_resource_before_crd_deletion(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_FOREIGN_MONITORING_CR="1",
+    )
+
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "delete customresourcedefinition" not in commands
+    assert "kubeadm reset" not in commands
+
+
 def test_destroy_handles_unavailable_api_and_removes_runtime_cache(
     cluster_fixture: dict[str, Path],
 ) -> None:
@@ -1147,7 +1548,22 @@ def test_destroy_handles_unavailable_api_and_removes_runtime_cache(
         cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "model-cache" / "vllm"
     )
     model_cache.mkdir(parents=True)
+    mark_owned(model_cache.parent, "kube-inference-platform model cache v1")
     (model_cache / "model.bin").write_text("fixture\n")
+    benchmark_results = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "benchmark-results"
+    )
+    benchmark_results.mkdir(parents=True)
+    mark_owned(benchmark_results, "kube-inference-platform benchmark results v1")
+    (benchmark_results / "raw.json").write_text("fixture\n")
+    observability_state = (
+        cluster_fixture["var_root"] / "lib" / "kube-inference-platform" / "observability"
+    )
+    observability_state.mkdir(parents=True)
+    mark_owned(observability_state, "kube-inference-platform observability storage v1")
+    (observability_state / "prometheus.db").write_text("fixture\n")
+    cluster_fixture["benchmark_work_dir"].mkdir()
+    (cluster_fixture["benchmark_work_dir"] / "trace.json").write_text("fixture\n")
 
     result = run_cluster_script(
         DESTROY_SCRIPT,
@@ -1159,6 +1575,9 @@ def test_destroy_handles_unavailable_api_and_removes_runtime_cache(
     assert result.returncode == 0, result.stdout + result.stderr
     assert "API is unavailable" in result.stdout
     assert not model_cache.exists()
+    assert not benchmark_results.exists()
+    assert not observability_state.exists()
+    assert not cluster_fixture["benchmark_work_dir"].exists()
 
 
 @pytest.mark.parametrize("confirmation", ["", "yes", "0"])

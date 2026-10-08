@@ -9,9 +9,11 @@ optimisation.
 > [!IMPORTANT]
 > The repository currently contains the v0.1 foundation, portable host preparation,
 > single-node Kubernetes bootstrap, NVIDIA GPU stack tooling, and a pluggable runtime layer
-> with a vLLM adapter. The host-to-CUDA path has passed on target NVIDIA A10 hardware. The
-> runtime is covered by deterministic local tests but still requires its target-hardware
-> inference checkpoint. Observability and real benchmark traffic are not yet implemented.
+> with a vLLM adapter. It also contains the Prometheus/Grafana/DCGM/OpenCost observability
+> layer and the AIPerf-based benchmark and report workflow. The host-to-CUDA path has passed
+> on target NVIDIA A10 hardware. Runtime, observability, cost, and benchmark tooling are
+> covered by deterministic local tests but still require their complete target-hardware
+> acceptance checkpoints.
 
 ## v0.1 objective
 
@@ -28,9 +30,9 @@ vLLM model server
         ↓
 OpenAI-compatible streaming API
         ↓
-concurrent benchmark client
+AIPerf benchmark sweep
         ↓
-latency, throughput, and GPU telemetry
+latency, throughput, GPU telemetry, and cost report
 ```
 
 The goal is not to build the full control plane. The goal is to prove that a real model can
@@ -43,7 +45,9 @@ flow.
 
 ```text
 .
-├── bench/                  Python benchmark CLI
+├── bench/                  AIPerf orchestration and static report generation
+├── benchmarks/             Reviewed suites, Kubernetes assets, work data, and reports
+├── costs/profiles/         Reviewed whole-node pricing profiles
 ├── deploy/                 Host, cluster, GPU, runtime, and observability assets
 ├── docs/                   Architecture documentation
 ├── experiments/baseline/   Reproducible baseline experiment record
@@ -59,7 +63,7 @@ if multi-node operations, upgrades, or recovery procedures make this document un
 
 ### Prerequisites
 
-- Python 3.12 for the project development environment (the code supports Python 3.11 or newer)
+- Python 3.12 recommended for development (supported range: Python 3.11–3.13)
 - [uv](https://docs.astral.sh/uv/)
 - Make
 
@@ -69,21 +73,57 @@ Create the development environment:
 make setup
 ```
 
+`make setup` also prepares the ignored `.cache/artifact-validators/` directory. The explicit
+setup helper downloads the Prometheus `3.14.0` release archive, Helm `3.21.4`, and the two
+digest-addressed upstream charts, verifies every download against a committed SHA-256, and
+installs only `promtool`, `helm`, and the chart archives into that cache. It supports Darwin
+and Linux on amd64 and arm64. It never pipes downloaded content to a shell. To populate or
+repair only this cache, run:
+
+```bash
+make artifact-validator-setup
+```
+
 Run all local checks:
 
 ```bash
 make check
 ```
 
-Inspect the initial benchmark command:
+`make check` validates Python and Bash, dashboard/profile structure, Prometheus rule
+structure, Helm values, and the Git-eligible tree for raw benchmark data or credentials.
+It is fail-closed: the pinned `promtool` must accept every rule and the pinned Helm binary must
+lint and render both exact, checksum-verified upstream chart archives. The check never
+downloads missing dependencies and fails with the cache-setup command instead of silently
+skipping semantic validation. `artifact-acceptance-check` remains a compatibility alias for
+the same strict gate.
+
+CI may cache `.cache/artifact-validators/` using the validator checksum manifest plus the
+cluster and observability version manifests as its cache key. A caller may instead provide
+pre-cached artifacts explicitly; the validator still enforces the pinned tool versions and
+chart checksums:
 
 ```bash
-python -m bench --help
+make artifact-check \
+  PROMTOOL=/path/to/promtool \
+  HELM=/path/to/helm \
+  KUBE_PROMETHEUS_STACK_CHART_ARCHIVE=/path/to/kube-prometheus-stack-91.4.0.tgz \
+  OPENCOST_CHART_ARCHIVE=/path/to/opencost-2.5.30.tgz
 ```
 
-The CLI is intentionally limited to a runnable help command at this stage. HTTP/SSE traffic,
-concurrency, token accounting, and metrics are added during the benchmark implementation
-step.
+For edit-time feedback when downloads are intentionally unavailable,
+`make artifact-structural-check` runs only the local schema, syntax, and sanitization subset.
+It is not an acceptance gate and is never used by `make check`.
+
+Inspect the benchmark platform commands:
+
+```bash
+make benchmark-help
+```
+
+The Python package validates reviewed suites, starts AIPerf Kubernetes jobs, normalizes AIPerf
+results, queries Prometheus and OpenCost, and renders reports. It does not implement a second
+HTTP load generator or recalculate AIPerf's request-level latency metrics.
 
 ## Host preparation
 
@@ -157,7 +197,7 @@ make cluster-bootstrap
 The v0.1 cluster is pinned to Kubernetes 1.36.4, containerd 2.3.4, Cilium 1.20.1,
 Cilium CLI 0.19.7, and Helm 3.21.4. The node runs both the control-plane and worker roles;
 kube-proxy remains enabled, and Cilium uses Kubernetes PodCIDR IPAM with an IPv4 VXLAN
-overlay. Hubble remains deferred to the observability milestone.
+overlay. Hubble remains outside v0.1; Cilium metrics are enabled without it.
 
 The default network ranges are:
 
@@ -246,8 +286,12 @@ The selected driver mode and digest are stored in the release values.
 CDI is enabled, NRI is disabled, and ordinary Pods request the standard `nvidia.com/gpu`
 resource without a `runtimeClassName`. The NVIDIA toolkit writes its containerd drop-in under
 `/etc/containerd/conf.d`, which is already imported by the project-owned containerd
-configuration. Node Feature Discovery, the toolkit, Device Plugin, GPU Feature Discovery,
-and validators are enabled. DCGM Exporter is deferred to observability; MIG, time-slicing,
+configuration. Node Feature Discovery, the toolkit, Device Plugin, GPU Feature Discovery, and
+validators are enabled for the GPU checkpoint. DCGM Exporter remains disabled until
+`observability-install`, which safely reconciles the existing exact GPU Operator release to
+enable the digest-pinned exporter at a one-second collection interval. GPU Operator retains
+ownership of that workload in `gpu-operator`; observability owns only its ServiceMonitor and
+metric contract. A later `gpu-install` rerun preserves the enabled exporter. MIG, time-slicing,
 DRA, and all other shared or partitioned allocation modes are disabled.
 
 The installer is deliberately a hard checkpoint. It requires Operator and operand health,
@@ -321,6 +365,13 @@ curl --fail http://127.0.0.1:8000/health
 curl --fail http://127.0.0.1:8000/v1/models
 ```
 
+The same port exposes `/metrics`. The Deployment and Pod template carry stable runtime,
+deployment, model-profile, served-model, model-revision, worker-role, replica, and rank labels.
+The Service carries only routing/discovery identity; Prometheus copies worker identity from
+the backing Pod, so a shared Service cannot assign one worker's role or rank to every target.
+The current single-process replica is labelled `worker-role=combined`; future router, prefill,
+and decode workers can use the same contract without changing dashboards.
+
 Read-only validation checks the pinned profile, image, model revision, ownership, Deployment,
 Pod, Service endpoint, `/health`, and `/v1/models` without creating resources or generating
 tokens:
@@ -349,6 +400,246 @@ image, model, ownership, or active-runtime drift is refused rather than adopted.
 On failure, inspect the printed Deployment, Pod, log, and event diagnostics; `VERBOSE=1` adds
 successful command details without writing response bodies or traces to disk.
 
+## Observability and cost accounting
+
+Install the internal observability stack after the runtime checkpoint:
+
+```bash
+make observability-install
+make observability-install COST_PROFILE=a10-node
+make observability-install VERBOSE=1 COST_PROFILE=a10-node
+make observability-check
+make observability-smoke
+```
+
+The stack combines Prometheus, Grafana, Alertmanager, kube-state-metrics, node-exporter, and
+the OpenCost API/exporter in `kip-observability`. Installation accepts only the exact
+KIP-managed GPU Operator chart, digest, driver mode, and baseline values before enabling its
+pinned DCGM Exporter; unmanaged or drifted releases fail before that Helm mutation. The GPU
+Operator continues to own the exporter in `gpu-operator`, while observability owns the scraper
+and metric contract. A checksum-pinned collector ConfigMap enables the GPU utilization,
+memory, power, temperature, clock, PCIe, throttle-reason, and XID counters used by the stable
+rules. Validation checks the effective ClusterPolicy and generated exporter DaemonSet—not only
+Helm's stored values—and a missing ConfigMap is safely restored before GPU health is evaluated.
+Unmanaged content or live image/environment drift is refused. Services remain `ClusterIP`;
+the installer creates no ingress, NodePort,
+or external load balancer. Prometheus
+keeps up to 15 days or 20 GB of samples, and project-owned local volumes reserve 30 GiB for
+Prometheus and 2 GiB each for Grafana and Alertmanager. Its 60-GiB free-space gate also leaves
+room for the separate 20-GiB benchmark PV created later by `benchmark-install`.
+
+The collection contract favours useful inference resolution without turning every exporter
+into a high-cardinality trace store:
+
+- vLLM and DCGM are scraped every 5 seconds; DCGM samples GPU state every second.
+- Kubernetes, node, Cilium, and OpenCost data are scraped every 15–30 seconds.
+- Prometheus rules evaluate every 15 seconds; OpenCost inference attribution evaluates each
+  minute.
+- AIPerf additionally records benchmark-local server and GPU telemetry every 333 milliseconds
+  only while a benchmark is active.
+
+`observability-check` is read-only. `observability-smoke` briefly runs the existing runtime
+smoke client to seed request, token, and latency series, cleans up those temporary resources,
+then requires every dashboard metric family and scrape target to be queryable.
+
+Raw engine and exporter metrics are adapted into stable `kip:` recording rules. Their common
+dimensions cover cluster, namespace, Deployment, runtime, model profile, served model,
+worker role, Pod, node, and GPU UUID. This is why the current one-model Deployment is labelled
+as a `combined` worker: the same dashboards can later compare routers, prefill workers, decode
+workers, replicas, and ranks instead of encoding today's topology into every query.
+
+Grafana provisions fleet, model-serving, GPU/node, distributed-topology, benchmark, and
+cost/efficiency dashboards. Active alerts cover missing collectors, runtime availability,
+request errors, queue and KV-cache pressure, GPU temperature/memory/XID events, storage, and
+stale cost data. Latency SLOs and budget thresholds are templates until the baseline provides
+defensible thresholds.
+
+List the internal services before opening a local-only tunnel:
+
+```bash
+kubectl -n kip-observability get services
+kubectl -n kip-observability port-forward service/kip-monitoring-grafana 3000:80
+kubectl -n kip-observability port-forward service/kip-monitoring-prometheus 9090:9090
+kubectl -n kip-observability port-forward service/kip-monitoring-alertmanager 9093:9093
+kubectl -n kip-observability port-forward service/kip-opencost 9003:9003
+```
+
+Do not bind these port-forwards to a public interface. Retrieve the generated Grafana
+credential only when it is needed:
+
+```bash
+kubectl -n kip-observability get secret kip-grafana-admin \
+  -o go-template='{{index .data "admin-user" | base64decode}}{{"\n"}}'
+kubectl -n kip-observability get secret kip-grafana-admin \
+  -o go-template='{{index .data "admin-password" | base64decode}}{{"\n"}}'
+```
+
+The password is never included in ordinary installer output. Treat it and the administrative
+kubeconfig as credentials.
+
+### Whole-node pricing
+
+OpenCost provides the Kubernetes allocation and inference-cost views, while reviewed profiles
+under `costs/profiles/` provide the actual machine price. Configure and inspect one with:
+
+```bash
+make cost-configure COST_PROFILE=a10-node
+make cost-check
+make cost-show
+```
+
+Create `costs/profiles/a10-node.json` from the committed
+`costs/profiles/a10-node.template.json`, replace every placeholder with public pricing
+metadata, and then use `COST_PROFILE=a10-node`. Template files are never accepted as active
+pricing.
+
+A v0.1 profile records a positive USD whole-node hourly rate, provider/SKU, region, pricing
+source, effective date, expected physical GPU count, and a declaration that electricity is
+already included. Its canonical SHA-256 is stored with benchmark metadata. The repository
+ships an unpriced A10 template but deliberately does not invent a provider rate.
+
+For the current dedicated-node model, the node rate is divided by the physical GPU count and
+assigned as the OpenCost GPU rate; CPU, RAM, storage, network, and load-balancer rates are zero
+to avoid counting the same rental twice. The primary **allocated** view includes node-local
+idle cost and reconciles to the server bill. The secondary **usage** view isolates active
+resource consumption and is an efficiency indicator, not an invoice. DCGM power integration
+adds Wh/request and kWh/million-token measurements, but no electricity charge is added because
+it is already part of the rental rate.
+
+Observability can run without pricing; dashboards then display `Pricing not configured`, and
+`cost-check` reports a warning. Benchmark publication is stricter: it requires a current,
+valid profile and refuses to emit zero or misleading costs. Cost figures are transparent
+rate-based estimates rather than provider invoices, and no billing credential is used.
+
+## AIPerf benchmark and report workflow
+
+The platform uses AIPerf 0.12 for traffic generation and request metrics. KIP owns the
+reviewed suite, Kubernetes orchestration, result normalization, Prometheus/OpenCost queries,
+sanitization, and static report; it does not maintain a competing asynchronous HTTP client.
+AIPerf 0.12 does not publish the proposed Kubernetes operator or CRDs, so v0.1 places an
+executor boundary around an ownership-safe ordinary Kubernetes Job. A later operator backend
+can replace that executor without changing suites or reports.
+
+Prepare the local benchmark environment and install its scoped Kubernetes foundation:
+
+```bash
+make benchmark-setup
+make benchmark-install
+make benchmark-check
+make benchmark-help
+```
+
+Installation creates the `kip-benchmark` namespace, scoped ServiceAccount, contract ConfigMap,
+and a 20-GiB PV/PVC backed by
+`/var/lib/kube-inference-platform/benchmark-results`. It uses `sudo` once when necessary to
+create that fixed project-owned path as UID/GID `1000` with mode `0770`; no arbitrary storage
+path is accepted. Ephemeral CPU-only Jobs run the digest-pinned `aiperf profile` once for the
+warmup and for each trial/cell, request no GPU, and write only into that results volume.
+Ownership checks prevent the executor from adopting or replacing unrelated Jobs or storage.
+
+Run the reviewed baseline only after cluster, GPU, runtime, observability, and cost checks pass:
+
+```bash
+make benchmark SUITE=baseline COST_PROFILE=a10-node
+```
+
+The baseline fixes the model, prompt distribution, 512-token input target, 128-token output
+target, streaming mode, temperature `0`, seed `42`, and `ignore_eos`. It excludes a 100-request
+warmup, then runs 1,000 measured requests at concurrency `1`, `4`, `8`, `16`, and `32` across
+five independent trials, with a 30-second cooldown between trials. That is 25,000 measured
+requests. Every warmup, trial, cell, cooldown, and experiment boundary is recorded in UTC.
+The runner freezes the starting Git commit, clean/dirty state, and a deterministic workspace
+SHA-256 before generating load; reports therefore remain tied to the exact reviewed or locally
+modified source state even when the benchmark lasts several hours. It also freezes component,
+runtime image/profile/model, GPU, and serving-Pod identity. Publication is refused if the source
+tree, serving Pod UID, restart count, or platform identity changes during the sweep.
+The six-hour suite timeout is applied independently to each AIPerf cell, since the reviewed
+25-trial matrix intentionally takes longer than six hours when executed sequentially. If the
+target-local orchestrator is interrupted, resume it with:
+
+```bash
+make benchmark-resume RUN_ID=<run-id> SUITE=baseline COST_PROFILE=a10-node
+```
+
+Resume is refused unless the frozen plan, suite and cost hashes, completed-cell prefix,
+AIPerf summaries, benchmark foundation, and serving-platform identity all still match. Partial
+output for the first missing cell is preserved with a `.failed-<UTC>` suffix before that cell is
+retried. Published data-quality notes identify resumed experiments.
+
+AIPerf runs with `--export-level summary`: raw prompts, responses, and request records are not
+exported. Each successful cell is compressed to `<cell>.tar.gz` on the node before its summary
+is copied into the ignored `benchmarks/.work/<run-id>/` normalization workspace. A successful
+report writes only sanitized artifacts to `benchmarks/reports/<run-id>/`:
+
+```text
+index.html
+summary.json
+summary.csv
+reproducibility.json
+charts/*.svg
+```
+
+The report combines AIPerf latency and throughput with model-scoped Prometheus runtime/GPU
+telemetry and OpenCost allocation. Sampled gauges are clipped to each trial's exact UTC
+boundaries; token rates and server latency percentiles are recomputed from raw counter and
+histogram increases over that trial, so five-minute dashboard windows cannot mix warmup,
+cooldown, or neighboring concurrency cells into the result. It keeps AIPerf's client-observed
+TTFT, inter-token latency (ITL), and end-to-end latency distinct from vLLM's server-observed
+TTFT, time per output token (TPOT), and end-to-end latency. It also includes request/output-token
+throughput, confidence intervals, trial variability,
+running/queued requests, KV-cache state, prompt/generated/cached token rates, server-side
+latency, GPU utilization, memory, power, temperature, PCIe traffic, clocks, throttle reasons,
+XID state, total experiment cost, measured-window cost, per-trial cost, allocated and usage
+USD/request,
+input/output/blended USD per million tokens, requests/USD, tokens/USD, and energy efficiency.
+Exact Grafana links point to each experiment window; static charts are generated without
+Grafana Image Renderer.
+
+The summary report calls its streaming claim **streaming timing evidence**: successful/error
+request accounting must reconcile, AIPerf must record streaming mode, and the non-cancelled run
+must contain positive TTFT and ITL percentiles. ITL measures the arrival gap observed by the
+client and is not presented as server TPOT. Summary-only AIPerf artifacts do not retain SSE frames and
+therefore cannot prove terminal `[DONE]` framing. `make runtime-smoke` remains the explicit
+incremental-SSE and `[DONE]` protocol checkpoint.
+
+The report audits the whole experiment against `node hourly rate × elapsed time` and requires
+OpenCost allocation to agree within the greater of 5% or one minute of node cost. Missing
+cost/token attribution, stale pricing, a stale post-run scrape, or a larger mismatch invalidates
+publication. Publication waits up to three minutes for Prometheus and OpenCost to cover the
+completed experiment window instead of publishing partial last-trial data.
+
+Inspect and manage local results with:
+
+```bash
+make benchmark-list
+make benchmark-report RUN_ID=<run-id>
+make benchmark-serve RUN_ID=<run-id>
+make benchmark-clean RETAIN_DAYS=30
+```
+
+`benchmark-clean` prunes validated run directories from both `.work/` and the node-local result
+path after the selected retention period; it never removes published reports or the shared
+tokenizer cache. Successful Job/receipt resources are removed immediately. A failed Job is
+kept for Kubernetes inspection for up to six hours while logs, `describe`, events, and status
+are copied into the ignored work directory; `destroy` removes any remaining benchmark state.
+
+The report server binds to `127.0.0.1` by default. Only the sanitized report is eligible for
+version control; never copy files from `.work/` into a report.
+
+## Complete v0.1 bootstrap
+
+Once a host has the required Ubuntu/kernel/network prerequisites plus Python 3.11–3.13, `uv`,
+and Make in the target checkout, the composed entry point is:
+
+```bash
+make bootstrap COST_PROFILE=a10-node
+```
+
+It runs `host-setup → cluster-bootstrap → gpu-install → runtime-deploy →
+observability-install → benchmark-install`. It installs benchmarking capability but does not
+start the 25,000-request experiment. Omitting `COST_PROFILE` leaves a healthy but explicitly
+unpriced stack; a later benchmark remains blocked until pricing is configured.
+
 ## Platform teardown
 
 To return a target to the pre-cluster state for a fresh bootstrap, run:
@@ -364,15 +655,19 @@ non-interactive run, use:
 make destroy CONFIRM_DESTROY=1
 ```
 
-Teardown first verifies the KIP ownership markers and pinned package versions. It deletes an
-exactly matching managed runtime namespace before uninstalling the matching GPU Operator,
-keeps Cilium alive while `kubeadm reset` stops remaining Pod sandboxes, and removes Cilium
-namespaces, interfaces, CNI binaries, pinned BPF objects, and only firewall rules in `CILIUM_`
-or `KUBE-` chains. It then unmounts project runtime mounts, removes the node-local model cache,
-KIP cluster/runtime data, and the pinned Kubernetes/containerd packages, restores the original
-`fstab`, and removes the project-owned sysctl and modules-load files. A matching user
-kubeconfig is removed; a changed kubeconfig is preserved. A project-owned teardown marker
-makes interrupted runs safely resumable.
+Teardown first verifies KIP ownership markers and pinned component identities. It removes
+owned benchmark Jobs/foundation state and local generated work data, then OpenCost,
+observability resources and their local volumes. Helm-retained Prometheus Operator CRDs are
+deleted only when every CRD carries KIP ownership and the exact chart-digest annotation. The
+managed runtime namespace and matching GPU Operator are removed next. Committed cost profiles
+and sanitized benchmark reports are preserved. It keeps Cilium alive while `kubeadm reset`
+stops remaining Pod sandboxes, then
+removes Cilium namespaces, interfaces, CNI binaries, pinned BPF objects, and only firewall
+rules in `CILIUM_` or `KUBE-` chains. Finally it unmounts project runtime mounts, removes the
+node-local model cache, KIP cluster/runtime data, and pinned Kubernetes/containerd packages,
+restores the original `fstab`, and removes project-owned sysctl and modules-load files. A
+matching user kubeconfig is removed; a changed kubeconfig is preserved. A project-owned
+teardown marker makes interrupted runs safely resumable.
 
 The command deliberately preserves SSH access, the operating system, kernel packages,
 inspection prerequisites installed by `host-setup`, and shared Helm/Cilium CLI binaries. It
@@ -385,6 +680,8 @@ make host-setup
 make cluster-bootstrap
 make gpu-install
 make runtime-deploy
+make observability-install COST_PROFILE=a10-node
+make benchmark-install
 ```
 
 ## v0.1 implementation milestones
@@ -398,9 +695,12 @@ make runtime-deploy
 - [x] Provision the target host and validate the host, cluster, and GPU slices.
 - [x] Implement the pluggable runtime layer and vLLM inference-checkpoint tooling.
 - [ ] Validate vLLM and streaming OpenAI-compatible inference on target hardware.
-- [ ] Implement the asynchronous benchmark client and inference metrics.
-- [ ] Install Prometheus, Grafana, and DCGM Exporter.
-- [ ] Run and document the baseline concurrency experiment.
+- [x] Implement Prometheus, Grafana, DCGM, and stable inference-metric tooling.
+- [ ] Validate observability collection and dashboards on target hardware.
+- [x] Implement OpenCost integration and reviewed whole-node cost profiles.
+- [ ] Configure and reconcile a real target-node price.
+- [x] Implement the AIPerf benchmark orchestration and static report tooling.
+- [ ] Run and document the five-trial baseline concurrency experiment.
 
 Deployment assets are added in that order. Each command documented here must be verified on
 the real machine before its checklist item is marked complete.
@@ -411,14 +711,17 @@ Never commit SSH keys, API tokens, kubeconfig files, real machine inventories, m
 credentials, or Kubernetes Secret values. Use local ignored files and environment variables,
 and commit only clearly marked examples with placeholder values.
 
-Raw benchmark traces and model caches remain local. Compact experiment results such as CSV
-and JSON summaries should be committed with the configuration that produced them.
+Raw benchmark traces, prompts, model responses, Job diagnostics, and model caches remain
+local. Sanitized HTML, SVG, CSV, JSON summaries, and reproducibility metadata may be committed
+with the reviewed suite and cost profile that produced them. Published cost profiles contain
+only public rates and provenance—never billing API keys or account identifiers.
 
 ## v0.1 Definition of Done
 
 The v0.1 milestone is complete when a real model runs on a real NVIDIA GPU inside bare-metal
 Kubernetes, serves streaming OpenAI-compatible requests, and can be concurrently benchmarked
-while application and GPU telemetry are collected.
+while application, GPU, energy, and cost telemetry are collected into a reproducible sanitized
+report whose allocated cost reconciles with the configured node price.
 
 The Go operator, custom gateway, authentication, rate limiting, autoscaling, multi-replica
 routing, and multi-node inference are deliberately deferred until this baseline is proven.

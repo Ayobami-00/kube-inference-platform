@@ -100,10 +100,11 @@ else
 fi
 
 if kip_acquire_privileges \
-    && kip_make_directory "$KIP_RUNTIME_CACHE_PATH" 0755; then
+    && kip_runtime_cache_storage_ready; then
     kip_record PASS "Model cache" "$KIP_RUNTIME_CACHE_PATH is ready for persistent model files."
 else
-    kip_record FAIL "Model cache" "Root or functional sudo is required to prepare the cache."
+    kip_record FAIL "Model cache" \
+        "Root access and an absent or exactly KIP-marked cache root are required."
     kip_summary "Runtime deployment"
     exit 1
 fi

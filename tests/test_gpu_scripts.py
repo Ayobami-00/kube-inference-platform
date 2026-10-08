@@ -28,6 +28,7 @@ def gpu_fixture(tmp_path: Path) -> dict[str, Path]:
     command_log = tmp_path / "commands.log"
     release_state = tmp_path / "release-installed"
     release_mode = tmp_path / "release-mode"
+    release_dcgm = tmp_path / "release-dcgm"
     smoke_state = tmp_path / "smoke-created"
     kubeconfig = tmp_path / "admin.conf"
     kubeconfig.write_text("fixture\n")
@@ -121,9 +122,14 @@ case "${1:-}" in
     get)
         [ -e "$KIP_TEST_RELEASE_STATE" ] || exit 1
         mode=$(cat "$KIP_TEST_RELEASE_MODE")
+        dcgm=false
+        [ ! -r "$KIP_TEST_RELEASE_DCGM" ] || dcgm=$(cat "$KIP_TEST_RELEASE_DCGM")
         [ "$mode" = operator ] && enabled=true || enabled=false
-        printf '{"kip":{"driverMode":"%s","chartDigest":"%s"},' \
+        printf '{"kip":{"driverMode":"%s","chartDigest":"%s"' \
             "$mode" "${KIP_TEST_RECORDED_DIGEST:-$KIP_TEST_EXPECTED_CHART_DIGEST}"
+        [ "${KIP_TEST_OMIT_DCGM_MARKER:-0}" = 1 ] \
+            || printf ',"dcgmExporterEnabled":%s' "${KIP_TEST_RECORDED_DCGM:-$dcgm}"
+        printf '%s' '},'
         printf '%s' '"clusterPolicy":{"deployCR":true},'
         printf '%s' '"gpuCluster":{"deployCR":false},"psa":{"enabled":true},'
         printf '"nfd":{"enabled":true},"cdi":{"enabled":%s,"nriPluginEnabled":false},' \
@@ -136,17 +142,34 @@ case "${1:-}" in
         printf '%s%s' '{"name":"RUNTIME_DROP_IN_CONFIG",' \
             '"value":"/etc/containerd/conf.d/99-nvidia.toml"}]},'
         printf '%s' '"devicePlugin":{"enabled":true},"dcgm":{"enabled":false},'
-        printf '%s' '"dcgmExporter":{"enabled":false},"mig":{"strategy":"none"},'
+        printf '"dcgmExporter":{"enabled":%s,' "$dcgm"
+        printf '%s' '"repository":"nvcr.io/nvidia/k8s",'
+        printf '%s' '"image":"dcgm-exporter",'
+        printf '%s%s' '"version":"4.6.0-4.8.3-distroless@sha256:' \
+            'b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a",'
+        printf '%s' '"serviceMonitor":{"enabled":false},'
+        printf '%s' '"config":{"name":"kip-dcgm-metrics"},'
+        printf '%s' '"env":[{"name":"DCGM_EXPORTER_INTERVAL","value":"1000"},'
+        printf '%s%s' '{"name":"DCGM_EXPORTER_COLLECTORS",' \
+            '"value":"/etc/dcgm-exporter/dcgm-metrics.csv"}]},'
+        printf '%s' '"mig":{"strategy":"none"},'
         printf '%s' '"migManager":{"enabled":false},'
+        [ "${KIP_TEST_EXTRA_VALUE:-0}" != 1 ] \
+            || printf '%s' '"unrelated":{"enabled":true},'
         printf '"driver":{"enabled":%s,"version":"595.91.07"}}\\n' "$enabled"
         ;;
     upgrade)
         [ "${KIP_TEST_HELM_FAIL:-0}" != 1 ] || exit 1
         mode=operator
+        dcgm=false
         for argument in "$@"; do
-            case "$argument" in kip.driverMode=*) mode=${argument#*=} ;; esac
+            case "$argument" in
+                kip.driverMode=*) mode=${argument#*=} ;;
+                dcgmExporter.enabled=*) dcgm=${argument#*=} ;;
+            esac
         done
         printf '%s' "$mode" > "$KIP_TEST_RELEASE_MODE"
+        printf '%s' "$dcgm" > "$KIP_TEST_RELEASE_DCGM"
         touch "$KIP_TEST_RELEASE_STATE"
         ;;
 esac""",
@@ -216,6 +239,9 @@ case "$args" in
             "gpu-feature-discovery-abc|$phase|$readiness" \
             "nvidia-operator-validator-abc|$phase|$readiness" \
             'nvidia-cuda-validator-abc|Succeeded|'
+        [ ! -r "$KIP_TEST_RELEASE_DCGM" ] \
+            || [ "$(cat "$KIP_TEST_RELEASE_DCGM")" != true ] \
+            || printf '%s\n' "nvidia-dcgm-exporter-abc|$phase|$readiness"
         [ "$mode" != operator ] || printf '%s\\n' "nvidia-driver-daemonset-abc|$phase|$readiness"
         ;;
     *'delete pod kip-gpu-smoke'*)
@@ -255,6 +281,7 @@ esac""",
         "command_log": command_log,
         "release_state": release_state,
         "release_mode": release_mode,
+        "release_dcgm": release_dcgm,
         "smoke_state": smoke_state,
         "kubeconfig": kubeconfig,
         "cluster_check": cluster_check,
@@ -270,6 +297,7 @@ def gpu_environment(fixture: dict[str, Path], **overrides: str) -> dict[str, str
             "KIP_TEST_COMMAND_LOG": str(fixture["command_log"]),
             "KIP_TEST_RELEASE_STATE": str(fixture["release_state"]),
             "KIP_TEST_RELEASE_MODE": str(fixture["release_mode"]),
+            "KIP_TEST_RELEASE_DCGM": str(fixture["release_dcgm"]),
             "KIP_TEST_SMOKE_STATE": str(fixture["smoke_state"]),
             "KIP_TEST_EXPECTED_CHART_DIGEST": CHART_DIGEST,
             "KIP_TEST_COSIGN_SHA": COSIGN_SHA,
@@ -297,9 +325,10 @@ def run_gpu_script(
     )
 
 
-def mark_installed(fixture: dict[str, Path], mode: str = "operator") -> None:
+def mark_installed(fixture: dict[str, Path], mode: str = "operator", *, dcgm: bool = False) -> None:
     fixture["release_state"].touch()
     fixture["release_mode"].write_text(mode)
+    fixture["release_dcgm"].write_text(str(dcgm).lower())
 
 
 def test_gpu_artifacts_pin_whole_gpu_cluster_policy_stack() -> None:
@@ -311,10 +340,24 @@ def test_gpu_artifacts_pin_whole_gpu_cluster_policy_stack() -> None:
     assert CHART_DIGEST in versions
     assert COSIGN_SHA in versions
     assert 'KIP_NVIDIA_DRIVER_VERSION="595.91.07"' in versions
+    assert 'KIP_DCGM_EXPORTER_REPOSITORY="nvcr.io/nvidia/k8s"' in versions
+    assert 'KIP_DCGM_EXPORTER_IMAGE="dcgm-exporter"' in versions
+    assert (
+        'KIP_DCGM_EXPORTER_LINUX_AMD64_DIGEST="sha256:b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a"'
+        in versions
+    )
     assert "clusterPolicy:\n  deployCR: true" in values
     assert "gpuCluster:\n  deployCR: false" in values
     assert "nriPluginEnabled: false" in values
-    assert "dcgmExporter:\n  enabled: false" in values
+    assert "dcgmExporter:\n" in values
+    assert "  enabled: false" in values
+    assert "repository: nvcr.io/nvidia/k8s" in values
+    assert "image: dcgm-exporter" in values
+    assert (
+        'version: "4.6.0-4.8.3-distroless@sha256:'
+        'b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a"' in values
+    )
+    assert "serviceMonitor:\n    enabled: false" in values
     assert "migManager:\n  enabled: false" in values
     assert "runtimeClassName" not in manifest
     assert 'nvidia.com/gpu: "1"' in manifest
@@ -332,6 +375,14 @@ def test_operator_managed_install_verifies_and_passes_hard_checkpoint(
     commands = gpu_fixture["command_log"].read_text()
     assert f"gpu-operator@{CHART_DIGEST}" in commands
     assert "driver.enabled=true" in commands
+    assert "dcgmExporter.repository=nvcr.io/nvidia/k8s" in commands
+    assert "dcgmExporter.image=dcgm-exporter" in commands
+    assert (
+        "dcgmExporter.version=4.6.0-4.8.3-distroless@sha256:"
+        "b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a" in commands
+    )
+    assert "dcgmExporter.enabled=false" in commands
+    assert "kip.dcgmExporterEnabled=false" in commands
     assert "kip.driverMode=operator" in commands
     assert "--timeout 25m" in commands
     assert "--atomic" not in commands
@@ -453,8 +504,9 @@ def test_supply_chain_verification_failure_blocks_install(
     [
         {"KIP_TEST_RELEASE_VERSION": "v26.3.3"},
         {"KIP_TEST_RECORDED_DIGEST": "sha256:drift"},
-        {"KIP_TEST_RELEASE_STATUS": "failed"},
         {"KIP_TEST_CDI_ENABLED": "false"},
+        {"KIP_TEST_EXTRA_VALUE": "1"},
+        {"KIP_TEST_RECORDED_DCGM": "true"},
     ],
 )
 def test_existing_release_drift_is_refused(
@@ -468,6 +520,21 @@ def test_existing_release_drift_is_refused(
     assert "helm upgrade" not in gpu_fixture["command_log"].read_text()
 
 
+def test_exact_failed_release_attempts_safe_reinstall(gpu_fixture: dict[str, Path]) -> None:
+    mark_installed(gpu_fixture)
+
+    result = run_gpu_script(INSTALL_SCRIPT, gpu_fixture, KIP_TEST_RELEASE_STATUS="failed")
+
+    # The fixture deliberately keeps reporting Helm status=failed after the
+    # reinstall; production Helm advances it to deployed. The important
+    # recovery contract here is that only the exact owned release is removed
+    # and immediately reinstalled, before health remains fail-closed.
+    assert result.returncode == 1
+    commands = gpu_fixture["command_log"].read_text()
+    assert "helm uninstall gpu-operator" in commands
+    assert "helm upgrade --install gpu-operator" in commands
+
+
 def test_driver_mode_change_is_refused(gpu_fixture: dict[str, Path]) -> None:
     mark_installed(gpu_fixture, "preinstalled")
 
@@ -477,14 +544,32 @@ def test_driver_mode_change_is_refused(gpu_fixture: dict[str, Path]) -> None:
     assert "helm upgrade" not in gpu_fixture["command_log"].read_text()
 
 
-def test_healthy_rerun_reconciles_matching_release(gpu_fixture: dict[str, Path]) -> None:
-    mark_installed(gpu_fixture)
+@pytest.mark.parametrize("dcgm", [False, True])
+def test_healthy_rerun_reconciles_matching_release(
+    gpu_fixture: dict[str, Path], dcgm: bool
+) -> None:
+    mark_installed(gpu_fixture, dcgm=dcgm)
 
     result = run_gpu_script(INSTALL_SCRIPT, gpu_fixture)
 
     assert result.returncode == 0, result.stderr
     assert "matching installation" in result.stdout
-    assert "helm upgrade --install" in gpu_fixture["command_log"].read_text()
+    commands = gpu_fixture["command_log"].read_text()
+    assert "helm upgrade --install" in commands
+    assert f"dcgmExporter.enabled={str(dcgm).lower()}" in commands
+
+
+def test_legacy_pre_observability_release_without_dcgm_marker_is_reconciled(
+    gpu_fixture: dict[str, Path],
+) -> None:
+    mark_installed(gpu_fixture, dcgm=False)
+
+    result = run_gpu_script(INSTALL_SCRIPT, gpu_fixture, KIP_TEST_OMIT_DCGM_MARKER="1")
+
+    assert result.returncode == 0, result.stderr
+    commands = gpu_fixture["command_log"].read_text()
+    assert "dcgmExporter.enabled=false" in commands
+    assert "kip.dcgmExporterEnabled=false" in commands
 
 
 def test_missing_required_inspection_command_is_a_useful_failure(

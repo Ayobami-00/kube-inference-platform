@@ -500,3 +500,38 @@ def test_invalid_make_runtime_values_exit_two(runtime_fixture: dict[str, Path]) 
 
     assert verbose.returncode == 2
     assert "VERBOSE must be 0 or 1" in verbose.stderr
+
+
+@pytest.mark.parametrize("preexisting", [False, True])
+def test_model_cache_requires_or_creates_exact_marker(tmp_path: Path, preexisting: bool) -> None:
+    var_root = tmp_path / "var"
+    cache_root = var_root / "lib" / "kube-inference-platform" / "model-cache"
+    cache_path = cache_root / "vllm"
+    work = tmp_path / "work"
+    work.mkdir()
+    if preexisting:
+        cache_root.mkdir(parents=True)
+        (cache_root / "foreign-model.bin").write_text("preserve\n")
+    script = f'''
+source "{ROOT / "deploy" / "lib" / "ui.sh"}"
+source "{ROOT / "deploy" / "cluster" / "lib" / "common.sh"}"
+KIP_VAR_ROOT="{var_root}"
+KIP_WORK_DIR="{work}"
+KIP_RUNTIME_CACHE_PATH="{cache_path}"
+source "{ROOT / "deploy" / "runtime" / "vllm" / "lib" / "preflight.sh"}"
+KIP_USE_SUDO=0
+kip_runtime_cache_storage_ready
+'''
+    completed = subprocess.run(
+        ["/bin/bash", "-c", script], cwd=ROOT, check=False, capture_output=True, text=True
+    )
+    if preexisting:
+        assert completed.returncode == 1
+        assert (cache_root / "foreign-model.bin").read_text() == "preserve\n"
+        assert not (cache_root / ".kip-managed-v1").exists()
+    else:
+        assert completed.returncode == 0, completed.stderr
+        assert (cache_root / ".kip-managed-v1").read_text() == (
+            "kube-inference-platform model cache v1\n"
+        )
+        assert cache_path.is_dir()

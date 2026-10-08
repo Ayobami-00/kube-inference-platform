@@ -1,0 +1,293 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kip-inference-platform
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  groups:
+    - name: kip.vllm.adapters
+      interval: 15s
+      rules:
+        - record: kip:requests:running
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod) (vllm:num_requests_running)
+        - record: kip:requests:waiting
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod) (vllm:num_requests_waiting)
+        - record: kip:runtime:pod_info
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod) (kip:requests:running * 0 + 1)
+        - record: kip:runtime:pod_identity
+          expr: kip:runtime:pod_info and on (cluster, namespace, node, pod) (count by (cluster, namespace, node, pod) (kip:runtime:pod_info) == 1)
+        - record: kip:runtime:deployment_info
+          expr: max without (node, pod, replica, pipeline_rank, tensor_rank) (kip:runtime:pod_info)
+        - record: kip:runtime:deployment_identity
+          expr: kip:runtime:deployment_info and on (cluster, namespace, deployment) (count by (cluster, namespace, deployment) (kip:runtime:deployment_info) == 1)
+        - record: kip:requests:rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(http_requests_total{handler=~"/v1/(chat/)?completions"}[5m]))
+        - record: kip:requests:success_rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_success_total{finished_reason!~"abort|error"}[5m]))
+        - record: kip:requests:error_rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_success_total{finished_reason=~"abort|error"}[5m]) or rate(http_requests_total{handler=~"/v1/(chat/)?completions",status!~"2.."}[5m])) or 0 * kip:requests:rate5m
+        - record: kip:tokens:prompt_rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:prompt_tokens_total[5m]))
+        - record: kip:tokens:generation_rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:generation_tokens_total[5m]))
+        - record: kip:tokens:cached_rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:prefix_cache_hits_total[5m]))
+        - record: kip:tokens:total_rate5m
+          expr: kip:tokens:prompt_rate5m + on (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:tokens:generation_rate5m
+        - record: kip:kv_cache:usage_ratio
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod) (vllm:kv_cache_usage_perc)
+        - record: kip:prefix_cache:hit_ratio5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:prefix_cache_hits_total[5m])) / clamp_min(sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:prefix_cache_queries_total[5m])), 1)
+        - record: kip:preemptions:rate5m
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:num_preemptions_total[5m]) or rate(vllm:request_num_preemptions_sum[5m]))
+        - record: kip:latency:ttft_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+        - record: kip:latency:ttft_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+        - record: kip:latency:ttft_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+        - record: kip:latency:tpot_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_time_per_output_token_seconds_bucket[5m])))
+        - record: kip:latency:tpot_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_time_per_output_token_seconds_bucket[5m])))
+        - record: kip:latency:tpot_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_time_per_output_token_seconds_bucket[5m])))
+        - record: kip:latency:e2e_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+        - record: kip:latency:e2e_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+        - record: kip:latency:e2e_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+        - record: kip:latency:queue_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_queue_time_seconds_bucket[5m])))
+        - record: kip:latency:queue_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_queue_time_seconds_bucket[5m])))
+        - record: kip:latency:queue_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_queue_time_seconds_bucket[5m])))
+        - record: kip:latency:prefill_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_prefill_time_seconds_bucket[5m])))
+        - record: kip:latency:prefill_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_prefill_time_seconds_bucket[5m])))
+        - record: kip:latency:prefill_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_prefill_time_seconds_bucket[5m])))
+        - record: kip:latency:decode_seconds_p95
+          expr: histogram_quantile(0.95, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_decode_time_seconds_bucket[5m])))
+        - record: kip:latency:decode_seconds_p50
+          expr: histogram_quantile(0.50, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_decode_time_seconds_bucket[5m])))
+        - record: kip:latency:decode_seconds_p99
+          expr: histogram_quantile(0.99, sum by (le, cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (rate(vllm:request_decode_time_seconds_bucket[5m])))
+        - record: kip:runtime:replicas_ready
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role) (label_replace(kube_deployment_status_replicas_ready{namespace="kip-runtime"}, "cluster", "kip-v01", "", ".*") * on (cluster, namespace, deployment) group_left (runtime, model_profile, model_name, model_revision, worker_role) kip:runtime:deployment_identity)
+        - record: kip:runtime:container_restarts
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, container) (label_replace(kube_pod_container_status_restarts_total{namespace="kip-runtime"}, "cluster", "kip-v01", "", ".*") * on (cluster, namespace, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node) kip:runtime:pod_identity)
+    - name: kip.gpu.adapters
+      interval: 15s
+      rules:
+        - record: kip:gpu:utilization_ratio
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_GPU_UTIL / 100, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:memory_used_bytes
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_FB_USED * 1024 * 1024, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:memory_total_bytes
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace((DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE) * 1024 * 1024, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:power_watts
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_POWER_USAGE, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:temperature_celsius
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_GPU_TEMP, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:pcie_tx_bytes_per_second
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_PROF_PCIE_TX_BYTES, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:pcie_rx_bytes_per_second
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_PROF_PCIE_RX_BYTES, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:xid_errors
+          # DCGM omits this field entirely on some healthy driver/GPU combinations
+          # until an XID occurs. Preserve alertability while publishing a truthful
+          # zero-valued series for every otherwise observable GPU.
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace((DCGM_FI_DEV_XID_ERRORS or (DCGM_FI_DEV_GPU_UTIL * 0)), "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:clock_throttle
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_CLOCKS_EVENT_REASONS, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:sm_clock_mhz
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_SM_CLOCK, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+        - record: kip:gpu:memory_clock_mhz
+          expr: max by (cluster, namespace, node, pod, gpu, gpu_uuid, gpu_model) (label_replace(label_replace(DCGM_FI_DEV_MEM_CLOCK, "gpu_uuid", "$1", "UUID", "(.*)"), "gpu_model", "$1", "modelName", "(.*)"))
+    - name: kip.gpu.runtime-attribution
+      interval: 15s
+      rules:
+        - record: kip:gpu:runtime_utilization_ratio
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:utilization_ratio * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_memory_used_bytes
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:memory_used_bytes * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_memory_total_bytes
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:memory_total_bytes * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_power_watts
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:power_watts * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_temperature_celsius
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:temperature_celsius * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_pcie_tx_bytes_per_second
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:pcie_tx_bytes_per_second * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_pcie_rx_bytes_per_second
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:pcie_rx_bytes_per_second * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_xid_errors
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:xid_errors * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_clock_throttle
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:clock_throttle * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_sm_clock_mhz
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:sm_clock_mhz * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+        - record: kip:gpu:runtime_memory_clock_mhz
+          expr: max by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod, gpu, gpu_uuid, gpu_model) (kip:gpu:memory_clock_mhz * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)
+    - name: kip.platform.adapters
+      interval: 15s
+      rules:
+        - record: kip:kubernetes:nodes_ready
+          expr: sum by (cluster) (label_replace(kube_node_status_condition{condition="Ready",status="true"}, "cluster", "kip-v01", "", ".*"))
+        - record: kip:kubernetes:pods_unready
+          expr: label_replace(sum by (namespace) (1 - kube_pod_status_ready{condition="true"}), "cluster", "kip-v01", "", ".*")
+        - record: kip:node:cpu_utilization_ratio
+          expr: label_replace(1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])), "cluster", "kip-v01", "", ".*")
+        - record: kip:node:memory_utilization_ratio
+          expr: label_replace(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes, "cluster", "kip-v01", "", ".*")
+        - record: kip:node:filesystem_available_ratio
+          expr: label_replace(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}, "cluster", "kip-v01", "", ".*")
+        - record: kip:node:network_receive_bytes_per_second
+          expr: label_replace(sum by (instance, device) (rate(node_network_receive_bytes_total{device!="lo"}[5m])), "cluster", "kip-v01", "", ".*")
+        - record: kip:node:network_transmit_bytes_per_second
+          expr: label_replace(sum by (instance, device) (rate(node_network_transmit_bytes_total{device!="lo"}[5m])), "cluster", "kip-v01", "", ".*")
+    - name: kip.cost.adapters
+      interval: 30s
+      rules:
+        - record: kip:cost:node_hourly_usd
+          expr: (max by (cluster, node) (label_replace((node_total_hourly_cost or node_gpu_hourly_cost * on (node) group_left() node_gpu_count), "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:gpu_hourly_usd_per_device
+          expr: (max by (cluster, node) (label_replace(node_gpu_hourly_cost, "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:cluster_hourly_usd
+          expr: (sum by (cluster) (kip:cost:node_hourly_usd)) and on() kip:cost:profile_info
+        - record: kip:cost:daily_projection_usd
+          expr: (kip:cost:cluster_hourly_usd * 24) and on() kip:cost:profile_info
+        - record: kip:cost:monthly_projection_usd
+          expr: (kip:cost:cluster_hourly_usd * 730) and on() kip:cost:profile_info
+        - record: kip:cost:inference_hourly_usd
+          expr: (sum by (cluster, namespace, model_name, cost_basis) (label_replace(llm_total_hourly_cost, "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:per_million_tokens_usd
+          expr: (max by (cluster, namespace, model_name, model_version, cost_basis, phase, allocation_method, workload_type) (label_replace(llm_cost_per_million_tokens, "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:cache_savings_ratio
+          expr: (max by (cluster, namespace, model_name, model_version, workload_type) (label_replace(llm_cache_savings_fraction, "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:pod_gpu_requested_hourly_usd
+          expr: (sum by (cluster, namespace, node, pod) (label_replace(container_gpu_allocation, "cluster", "kip-v01", "", ".*") * on (cluster, node) group_left() kip:cost:gpu_hourly_usd_per_device)) and on() kip:cost:profile_info
+        - record: kip:cost:shared_pod_info
+          expr: (max by (cluster, namespace, pod) (label_replace(kube_pod_labels{label_kube_inference_platform_io_inference_shared="true"}, "cluster", "kip-v01", "", ".*"))) and on() kip:cost:profile_info
+        - record: kip:cost:runtime_gpu_requested_hourly_usd
+          expr: (sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank, node, pod) (kip:cost:pod_gpu_requested_hourly_usd * on (cluster, namespace, node, pod) group_left (deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) kip:runtime:pod_identity)) and on() kip:cost:profile_info
+        - record: kip:cost:shared_gpu_requested_hourly_usd
+          expr: (sum by (cluster, namespace, node, pod) (kip:cost:pod_gpu_requested_hourly_usd * on (cluster, namespace, pod) group_left() kip:cost:shared_pod_info)) and on() kip:cost:profile_info
+        - record: kip:cost:unattributed_gpu_requested_hourly_usd
+          expr: (sum by (cluster, namespace, node, pod) ((kip:cost:pod_gpu_requested_hourly_usd unless on (cluster, namespace, pod) kip:runtime:pod_identity) unless on (cluster, namespace, pod) kip:cost:shared_pod_info)) and on() kip:cost:profile_info
+        - record: kip:cost:gpu_unrequested_hourly_usd
+          expr: (clamp_min(kip:cost:cluster_hourly_usd - on (cluster) (sum by (cluster) (kip:cost:pod_gpu_requested_hourly_usd) or on (cluster) kip:cost:cluster_hourly_usd * 0), 0)) and on() kip:cost:profile_info
+        - record: kip:cost:per_request_usd
+          expr: (kip:cost:inference_hourly_usd / on (cluster, namespace, model_name) group_left clamp_min(sum by (cluster, namespace, model_name) (kip:requests:success_rate5m) * 3600, 0.000001)) and on() kip:cost:profile_info
+        - record: kip:efficiency:requests_per_usd
+          expr: (sum by (cluster, namespace, model_name) (kip:requests:success_rate5m) * 3600 / on (cluster, namespace, model_name) clamp_min(kip:cost:inference_hourly_usd{cost_basis="allocation"}, 0.000001)) and on() kip:cost:profile_info
+        - record: kip:efficiency:tokens_per_usd
+          expr: (sum by (cluster, namespace, model_name) (kip:tokens:generation_rate5m) * 3600 / on (cluster, namespace, model_name) clamp_min(kip:cost:inference_hourly_usd{cost_basis="allocation"}, 0.000001)) and on() kip:cost:profile_info
+        - record: kip:energy:kilowatt_hours_per_million_tokens
+          expr: sum by (cluster) (kip:gpu:power_watts) / 1000 / clamp_min(sum by (cluster) (kip:tokens:generation_rate5m) * 3600 / 1000000, 0.000001)
+        - record: kip:energy:watt_hours_per_request
+          expr: sum by (cluster) (kip:gpu:power_watts) / clamp_min(sum by (cluster) (kip:requests:success_rate5m), 0.000001) / 3600
+        - record: kip:energy:runtime_kilowatt_hours_per_million_tokens
+          expr: (sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (kip:gpu:runtime_power_watts) / 1000) / on (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) clamp_min(sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (kip:tokens:generation_rate5m) * 3600 / 1000000, 0.000001)
+        - record: kip:energy:runtime_watt_hours_per_request
+          expr: sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (kip:gpu:runtime_power_watts) / on (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) clamp_min(sum by (cluster, namespace, deployment, runtime, model_profile, model_name, model_revision, worker_role, replica, pipeline_rank, tensor_rank) (kip:requests:success_rate5m), 0.000001) / 3600
+    - name: kip.alerts
+      interval: 15s
+      rules:
+        - alert: KIPRuntimeTargetMissing
+          expr: absent(up{job=~".*vllm.*"} == 1)
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: vLLM metrics target is missing
+            description: Prometheus has not observed a healthy vLLM target for two minutes.
+        - alert: KIPRuntimeUnavailable
+          expr: min(kip:runtime:replicas_ready) < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: Inference runtime has no Ready replica
+            description: A managed runtime Deployment has had no Ready replica for two minutes.
+        - alert: KIPDCGMExporterMissing
+          expr: absent(DCGM_FI_DEV_GPU_UTIL)
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: DCGM Exporter metrics are missing
+            description: GPU telemetry has been absent for two minutes.
+        - alert: KIPRuntimeRequestErrors
+          expr: sum(kip:requests:error_rate5m) > 0
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: Inference requests are failing
+            description: vLLM has reported request failures for five minutes.
+        - alert: KIPRuntimeQueueGrowing
+          expr: sum(kip:requests:waiting) > 8
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: Inference request queue is sustained
+            description: More than eight requests have waited continuously for five minutes.
+        - alert: KIPKVCachePressure
+          expr: max(kip:kv_cache:usage_ratio) > 0.90
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: KV cache pressure is high
+            description: KV cache usage has exceeded 90 percent for five minutes.
+        - alert: KIPGPUTemperatureHigh
+          expr: max(kip:gpu:temperature_celsius) > 85
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: GPU temperature is high
+            description: A GPU has exceeded 85 degrees Celsius for five minutes.
+        - alert: KIPGPUMemoryPressure
+          expr: max(kip:gpu:memory_used_bytes / kip:gpu:memory_total_bytes) > 0.95
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: GPU memory pressure is high
+            description: GPU framebuffer usage has exceeded 95 percent for five minutes.
+        - alert: KIPGPUXIDError
+          expr: max(kip:gpu:xid_errors) > 0
+          for: 1m
+          labels: { severity: critical }
+          annotations:
+            summary: NVIDIA XID error detected
+            description: DCGM reports a non-zero XID error code.
+        - alert: KIPPersistentVolumeFilling
+          expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.15
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: Persistent volume has less than 15 percent free
+            description: An observability or runtime volume is approaching capacity.
+        - alert: KIPOpenCostStale
+          expr: absent_over_time(node_gpu_hourly_cost[5m]) and on() kip:cost:profile_info
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: OpenCost pricing data is stale
+            description: OpenCost has not emitted node GPU pricing for five minutes.
+    - name: kip.disabled.templates
+      interval: 1m
+      rules:
+        - record: kip:template:latency_slo_disabled
+          expr: vector(0)
+          labels:
+            enabled: "false"
+            purpose: baseline-required
+        - record: kip:template:cost_budget_disabled
+          expr: vector(0)
+          labels:
+            enabled: "false"
+            purpose: baseline-required

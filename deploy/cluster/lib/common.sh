@@ -59,7 +59,7 @@ kip_exec() {
 
         case "$command_name" in
             awk | basename | chmod | cmp | cp | cut | dirname | find | grep | head | install | \
-                mkdir | mktemp | mv | rm | sed | sort | tail | test | touch | tr | wc)
+                mkdir | mktemp | mv | rm | rmdir | sed | sort | tail | test | touch | tr | wc)
                 if kip_exec_raw "$command_name" "$@"; then
                     return 0
                 else

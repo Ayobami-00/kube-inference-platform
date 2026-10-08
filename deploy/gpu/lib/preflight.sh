@@ -30,8 +30,12 @@ kip_gpu_has_orphaned_state() {
 
 kip_gpu_preflight_state() {
     if kip_gpu_release_exists; then
-        kip_gpu_release_is_exact || return 1
-        printf '%s' matching
+        if kip_gpu_release_is_exact; then
+            printf '%s' matching
+            return
+        fi
+        kip_gpu_release_identity_exact || return 1
+        printf '%s' recoverable
         return
     fi
     kip_gpu_has_orphaned_state && return 1

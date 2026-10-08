@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "aiperf": {
+    "version": "0.12.0",
+    "image": "nvcr.io/nvidia/ai-dynamo/aiperf:0.12.0@sha256:6eab5ee35be06e72c79fdd8017fcd60b08c187399dcdb3bf9b8087f7351149bf",
+    "architecture": "linux/amd64",
+    "executor": "kubernetes-job",
+    "operatorAvailable": false
+  }
+}

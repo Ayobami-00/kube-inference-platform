@@ -1,0 +1,48 @@
+{
+  "request_throughput": {"unit": "requests/sec", "avg": 0.2504302580624667},
+  "request_latency": {
+    "unit": "ms",
+    "avg": 3652.1454372343746,
+    "p50": 3644.0809205,
+    "p95": 3789.34443225,
+    "p99": 3909.3341161199996
+  },
+  "request_count": {"unit": "requests", "avg": 64},
+  "error_request_count": null,
+  "time_to_first_token": {
+    "unit": "ms",
+    "avg": 30.814987671875,
+    "p50": 30.668547999999998,
+    "p95": 33.0437491,
+    "p99": 34.344268879999994
+  },
+  "inter_token_latency": {
+    "unit": "ms",
+    "avg": 18.19909533160138,
+    "p50": 18.158001085427134,
+    "p95": 18.883067175879397,
+    "p99": 19.481766498241203
+  },
+  "output_token_throughput": {"unit": "tokens/sec", "avg": 50.08213863971112},
+  "input_sequence_length": {"unit": "tokens", "avg": 100},
+  "output_sequence_length": {"unit": "tokens", "avg": 199.984375},
+  "total_isl": {"unit": "tokens", "avg": 6400},
+  "total_osl": {"unit": "tokens", "avg": 12799},
+  "input_config": {
+    "endpoint": {
+      "model_names": ["Qwen/Qwen3-0.6B"],
+      "type": "chat",
+      "streaming": true,
+      "url": "localhost:8000"
+    },
+    "loadgen": {
+      "concurrency": 1,
+      "request_count": 64,
+      "warmup_request_count": 1
+    }
+  },
+  "was_cancelled": false,
+  "error_summary": [],
+  "start_time": "2025-10-02T02:25:29.663501",
+  "end_time": "2025-10-02T02:29:45.223623"
+}

@@ -84,20 +84,60 @@ kip_check_runtime_conflicts() {
     fi
 }
 
+kip_find_external_docker_source() {
+    local candidate destination source_dir
+
+    destination="$KIP_ETC_ROOT/apt/sources.list.d/docker.sources"
+    if [ -r "$KIP_ETC_ROOT/apt/sources.list" ] \
+        && command grep -Fq 'https://download.docker.com/linux/ubuntu' \
+            "$KIP_ETC_ROOT/apt/sources.list"; then
+        printf '%s' "$KIP_ETC_ROOT/apt/sources.list"
+        return 0
+    fi
+
+    source_dir="$KIP_ETC_ROOT/apt/sources.list.d"
+    [ -d "$source_dir" ] || return 1
+    for candidate in "$source_dir"/*; do
+        [ -f "$candidate" ] || continue
+        [ "$candidate" = "$destination" ] && continue
+        if command grep -Fq 'https://download.docker.com/linux/ubuntu' "$candidate"; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+kip_docker_source_is_owned() {
+    local current=$1 expected=$2 expected_key line_count
+
+    command grep -Fq 'Managed by Kube Inference Platform' "$current" \
+        && return 0
+    expected_key=$(command grep '^Signed-By: ' "$expected") || return 1
+    line_count=$(command awk 'NF {count++} END {print count + 0}' "$current")
+    [ "$line_count" -eq 6 ] \
+        && command grep -Fxq 'Types: deb' "$current" \
+        && command grep -Fxq 'URIs: https://download.docker.com/linux/ubuntu' "$current" \
+        && command grep -Fxq "Suites: $KIP_OS_CODENAME" "$current" \
+        && command grep -Fxq 'Components: stable' "$current" \
+        && command grep -Fxq 'Architectures: amd64' "$current" \
+        && command grep -Fxq "$expected_key" "$current"
+}
+
 kip_install_repository_files() {
     local docker_key docker_keyring docker_sources kubernetes_key kubernetes_keyring
-    local kubernetes_sources
+    local docker_destination external_docker_source kubernetes_sources
 
     docker_key="$KIP_WORK_DIR/docker.asc"
     docker_keyring="$KIP_ETC_ROOT/apt/keyrings/docker.asc"
     docker_sources="$KIP_WORK_DIR/docker.sources"
+    docker_destination="$KIP_ETC_ROOT/apt/sources.list.d/docker.sources"
     kubernetes_key="$KIP_WORK_DIR/kubernetes-release.key"
     kubernetes_keyring="$KIP_WORK_DIR/kubernetes-apt-keyring.gpg"
     kubernetes_sources="$KIP_WORK_DIR/kubernetes.list"
 
-    kip_exec curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o "$docker_key"
-    kip_install_file "$docker_key" "$docker_keyring"
     cat > "$docker_sources" <<EOF
+# Managed by Kube Inference Platform v0.1.
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
 Suites: $KIP_OS_CODENAME
@@ -105,7 +145,17 @@ Components: stable
 Architectures: amd64
 Signed-By: $docker_keyring
 EOF
-    kip_install_file "$docker_sources" "$KIP_ETC_ROOT/apt/sources.list.d/docker.sources"
+    external_docker_source=$(kip_find_external_docker_source || true)
+    if [ -n "$external_docker_source" ]; then
+        if [ -e "$docker_destination" ]; then
+            kip_docker_source_is_owned "$docker_destination" "$docker_sources" || return 1
+            kip_run_privileged rm -f "$docker_destination"
+        fi
+    else
+        kip_exec curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o "$docker_key"
+        kip_install_file "$docker_key" "$docker_keyring"
+        kip_install_file "$docker_sources" "$docker_destination"
+    fi
 
     kip_exec curl -fsSL \
         "https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key" \

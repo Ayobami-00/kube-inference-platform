@@ -57,7 +57,22 @@ gfd:
 dcgm:
   enabled: false
 dcgmExporter:
+  # Observability enables this exact Operator-owned workload after the GPU
+  # scheduling checkpoint. Keeping it off here avoids installing telemetry
+  # before Prometheus exists while preserving GPU Operator ownership.
   enabled: false
+  repository: nvcr.io/nvidia/k8s
+  image: dcgm-exporter
+  version: "4.6.0-4.8.3-distroless@sha256:b4df763de9558e5b3f1f1d79bc65b772fcf65b8a9c3664ea7173e47153112b4a"
+  serviceMonitor:
+    enabled: false
+  config:
+    name: kip-dcgm-metrics
+  env:
+    - name: DCGM_EXPORTER_INTERVAL
+      value: "1000"
+    - name: DCGM_EXPORTER_COLLECTORS
+      value: /etc/dcgm-exporter/dcgm-metrics.csv
 
 mig:
   strategy: none

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "name": "baseline",
+  "description": "v0.1 whole-GPU Qwen2.5-7B concurrency baseline",
+  "target": {
+    "runtime": "vllm",
+    "modelProfile": "qwen2.5-7b-instruct",
+    "servedModel": "qwen2.5-7b-instruct",
+    "endpoint": "http://vllm-qwen25-7b.kip-runtime.svc.cluster.local:8000/v1"
+  },
+  "workload": {
+    "protocol": "openai-chat",
+    "streaming": true,
+    "inputTokens": 512,
+    "outputTokens": 128,
+    "temperature": 0,
+    "seed": 42,
+    "ignoreEos": true
+  },
+  "warmup": {
+    "requests": 100,
+    "concurrency": 8,
+    "excludeFromMetrics": true
+  },
+  "sweep": {
+    "concurrency": [1, 4, 8, 16, 32],
+    "requestsPerCell": 1000,
+    "trialsPerCell": 5,
+    "cooldownSeconds": 30,
+    "confidenceLevel": 0.95,
+    "iterationOrder": "independent"
+  },
+  "telemetry": {
+    "sampleIntervalMilliseconds": 333,
+    "prometheusContextSeconds": 120
+  },
+  "retention": {
+    "resultsDays": 30,
+    "timeoutSeconds": 21600
+  }
+}

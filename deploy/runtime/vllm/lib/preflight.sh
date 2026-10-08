@@ -2,6 +2,30 @@
 
 # GPU-node, disk, Secret, and managed-state preflight checks.
 
+KIP_RUNTIME_CACHE_MARKER=".kip-managed-v1"
+KIP_RUNTIME_CACHE_MARKER_CONTENT="kube-inference-platform model cache v1"
+
+kip_runtime_cache_storage_ready() {
+    local marker marker_content marker_source
+    local root="$KIP_VAR_ROOT/lib/kube-inference-platform/model-cache"
+
+    marker="$root/$KIP_RUNTIME_CACHE_MARKER"
+    if kip_run_privileged test -e "$root"; then
+        kip_run_privileged test -d "$root" || return 1
+        ! kip_run_privileged test -L "$root" || return 1
+        kip_run_privileged test -f "$marker" || return 1
+        ! kip_run_privileged test -L "$marker" || return 1
+        marker_content=$(kip_run_privileged sed -n 'p' "$marker" 2>/dev/null) || return 1
+        [ "$marker_content" = "$KIP_RUNTIME_CACHE_MARKER_CONTENT" ] || return 1
+    else
+        kip_make_directory "$root" 0755 || return 1
+        marker_source="$KIP_WORK_DIR/model-cache-marker"
+        printf '%s\n' "$KIP_RUNTIME_CACHE_MARKER_CONTENT" > "$marker_source"
+        kip_install_file "$marker_source" "$marker" 0444 || return 1
+    fi
+    kip_make_directory "$KIP_RUNTIME_CACHE_PATH" 0755
+}
+
 kip_runtime_single_gpu_node() {
     local output
 

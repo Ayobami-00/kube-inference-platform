@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "name": "a10-node",
+  "currency": "USD",
+  "nodeHourlyRateUsd": null,
+  "provider": "REPLACE_ME",
+  "machineType": "single-node-nvidia-a10",
+  "region": "REPLACE_ME",
+  "source": "REPLACE_WITH_PUBLIC_PRICING_REFERENCE",
+  "effectiveFrom": "REPLACE_WITH_YYYY-MM-DD",
+  "physicalGpuCount": 1,
+  "powerIncludedInRate": true
+}

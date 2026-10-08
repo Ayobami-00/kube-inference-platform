@@ -1,0 +1,179 @@
+fullnameOverride: kip-monitoring
+
+kip:
+  chartDigest: sha256:0032315f2580f488ce433ff9d18de24ce631857ff7f1d73693171eeeb7affd52
+  managedBy: kube-inference-platform
+
+commonLabels:
+  app.kubernetes.io/managed-by: kube-inference-platform
+  app.kubernetes.io/part-of: kube-inference-platform
+
+defaultRules:
+  create: true
+  rules:
+    windows: false
+
+# kubeadm keeps these component metrics on node loopback in the v0.1 cluster.
+# Do not create permanently failing Pod-network scrapes; cluster-check remains
+# authoritative for control-plane health until a later hardening milestone
+# explicitly exposes authenticated metrics endpoints.
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeScheduler:
+  enabled: false
+
+grafana:
+  enabled: true
+  image:
+    sha: 5e655f9a271aadf00d1db513f64c927af9319b0ce673359bba5072413c0da5fd
+  initChownData:
+    image:
+      sha: 1cfa4e2b09e127b9c4ed43578d3f3c18e7d44ea47b9ea98475c0cbe9086525f8
+  admin:
+    existingSecret: kip-grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  ingress:
+    enabled: false
+  service:
+    type: ClusterIP
+  persistence:
+    enabled: true
+    existingClaim: kip-grafana
+  sidecar:
+    image:
+      sha: d78f9e2c1e20356a8ad6359f346ff35b5589922df56c8ce4d67ad38749fad65f
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: kip-observability
+      provider:
+        allowUiUpdates: false
+        disableDelete: false
+        foldersFromFilesStructure: true
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      uid: prometheus
+  grafana.ini:
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+    security:
+      cookie_secure: false
+      disable_gravatar: true
+    users:
+      allow_sign_up: false
+
+alertmanager:
+  enabled: true
+  ingress:
+    enabled: false
+  service:
+    type: ClusterIP
+  alertmanagerSpec:
+    replicas: 1
+    retention: 120h
+    image:
+      sha: 268d4bf0e4bc0fe6dbdef6a59ce81a2918c88458bf8edf7dd0572ad372a093e6
+    storage:
+      volumeClaimTemplate:
+        metadata:
+          labels:
+            kube-inference-platform.io/volume: alertmanager
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: kip-local-static
+          selector:
+            matchLabels:
+              kube-inference-platform.io/volume: alertmanager
+          resources:
+            requests:
+              storage: 2Gi
+
+prometheus:
+  enabled: true
+  ingress:
+    enabled: false
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    replicas: 1
+    retention: 15d
+    retentionSize: 20GB
+    scrapeInterval: 15s
+    scrapeTimeout: 10s
+    evaluationInterval: 15s
+    enableAdminAPI: false
+    image:
+      sha: 934c331c7aa29ffdb23b4befec6f34321c518453e63713d741d8ac1737c8e049
+    externalLabels:
+      cluster: kip-v01
+    serviceMonitorSelector:
+      matchLabels:
+        release: kip-monitoring
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector:
+      matchLabels:
+        release: kip-monitoring
+    podMonitorNamespaceSelector: {}
+    ruleSelector:
+      matchLabels:
+        release: kip-monitoring
+    ruleNamespaceSelector: {}
+    storageSpec:
+      volumeClaimTemplate:
+        metadata:
+          labels:
+            kube-inference-platform.io/volume: prometheus
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: kip-local-static
+          selector:
+            matchLabels:
+              kube-inference-platform.io/volume: prometheus
+          resources:
+            requests:
+              storage: 30Gi
+
+prometheusOperator:
+  enabled: true
+  image:
+    sha: 8f557a77f1a3d33af58e8ee9a353b25c078814655b1f6a04bafe3a6de0eb1ffb
+  prometheusConfigReloader:
+    image:
+      sha: e4a878ac166b119d48f54226901863623dffba556020529563c4a62e35546fca
+  admissionWebhooks:
+    enabled: true
+    patch:
+      image:
+        sha: 5c5ed49776ac3a295c723de1f9743158a4e72f08c456e88e93536d41c815f03b
+  tls:
+    enabled: true
+
+kube-state-metrics:
+  image:
+    # Unlike the parent chart's sha fields, the kube-state-metrics subchart
+    # concatenates this field verbatim after '@'.
+    sha: sha256:01171220c7c059afc85034ffe687bfe7249e41c0cc46fbe9a5128503ceee3016
+  metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/managed-by,app.kubernetes.io/component,app.kubernetes.io/name,app.kubernetes.io/instance,kube-inference-platform.io/runtime,kube-inference-platform.io/model-profile,kube-inference-platform.io/model-revision,kube-inference-platform.io/served-model,kube-inference-platform.io/worker-role,kube-inference-platform.io/inference-shared]
+    - deployments=[app.kubernetes.io/managed-by,app.kubernetes.io/component,app.kubernetes.io/name,app.kubernetes.io/instance,kube-inference-platform.io/runtime,kube-inference-platform.io/model-profile,kube-inference-platform.io/model-revision,kube-inference-platform.io/served-model,kube-inference-platform.io/worker-role,kube-inference-platform.io/inference-shared]
+  prometheus:
+    monitor:
+      interval: 15s
+
+prometheus-node-exporter:
+  image:
+    digest: sha256:bbfbd533202cfef891c70383ddf6f0c32acece66400ad8091a18bed7aad5db6f
+  prometheus:
+    monitor:
+      interval: 15s
+
+windowsMonitoring:
+  enabled: false

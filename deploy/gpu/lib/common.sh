@@ -46,7 +46,18 @@ kip_gpu_recorded_mode() {
     printf '%s' "$values" | kip_exec jq -er '.kip.driverMode'
 }
 
-kip_gpu_release_is_exact() {
+kip_gpu_dcgm_exporter_state() {
+    local values
+
+    values=$(kip_gpu_helm_values_json) || return 1
+    printf '%s' "$values" | kip_exec jq -er '
+        .dcgmExporter.enabled
+        | select(type == "boolean")
+        | tostring'
+}
+
+kip_gpu_release_identity_exact_for_dcgm_state() {
+    local expected_dcgm_enabled=$1
     local baseline_matches driver_enabled expected_driver_enabled recorded_digest recorded_mode
     local chart status
     local list_json status_json values_json
@@ -65,9 +76,35 @@ kip_gpu_release_is_exact() {
     recorded_mode=$(printf '%s' "$values_json" | kip_exec jq -er '.kip.driverMode') || return 1
     recorded_digest=$(printf '%s' "$values_json" | kip_exec jq -er '.kip.chartDigest') || return 1
     driver_enabled=$(printf '%s' "$values_json" | kip_exec jq -r '.driver.enabled') || return 1
+    case "$expected_dcgm_enabled" in
+        true | false) ;;
+        *) return 1 ;;
+    esac
+    case "$status" in
+        deployed | failed | pending-install | pending-upgrade | pending-rollback) ;;
+        *) return 1 ;;
+    esac
     baseline_matches=$(printf '%s' "$values_json" | kip_exec jq -r \
-        --arg driverVersion "$KIP_NVIDIA_DRIVER_VERSION" '
-        (.clusterPolicy.deployCR == true)
+        --arg dcgmRepository "$KIP_DCGM_EXPORTER_REPOSITORY" \
+        --arg dcgmImage "$KIP_DCGM_EXPORTER_IMAGE" \
+        --arg dcgmVersion "$KIP_DCGM_EXPORTER_PINNED_VERSION" \
+        --arg dcgmConfig "$KIP_DCGM_METRICS_CONFIG_NAME" \
+        --arg dcgmCollectors "$KIP_DCGM_METRICS_COLLECTOR_PATH" \
+        --arg driverVersion "$KIP_NVIDIA_DRIVER_VERSION" \
+        --argjson dcgmEnabled "$expected_dcgm_enabled" '
+        ((keys - ["clusterPolicy", "gpuCluster", "psa", "nfd", "cdi",
+            "sandboxWorkloads", "driver", "toolkit", "devicePlugin", "gfd",
+            "dcgm", "dcgmExporter", "mig", "migManager", "gds", "gdrcopy",
+            "vgpuManager", "vgpuDeviceManager", "vfioManager", "kataManager",
+            "sandboxDevicePlugin", "kataSandboxDevicePlugin", "ccManager", "kip"])
+            | length == 0)
+        and ((.dcgmExporter | keys
+            - ["enabled", "repository", "image", "version", "serviceMonitor", "config", "env"])
+            | length == 0)
+        and ((.kip | keys
+            - ["driverMode", "chartDigest", "dcgmExporterEnabled"])
+            | length == 0)
+        and (.clusterPolicy.deployCR == true)
         and (.gpuCluster.deployCR == false)
         and (.psa.enabled == true)
         and (.nfd.enabled == true)
@@ -76,10 +113,21 @@ kip_gpu_release_is_exact() {
         and (.toolkit.enabled == true)
         and (.devicePlugin.enabled == true)
         and (.dcgm.enabled == false)
-        and (.dcgmExporter.enabled == false)
+        and (.dcgmExporter.enabled == $dcgmEnabled)
+        and (.dcgmExporter.repository == $dcgmRepository)
+        and (.dcgmExporter.image == $dcgmImage)
+        and (.dcgmExporter.version == $dcgmVersion)
+        and (.dcgmExporter.serviceMonitor.enabled == false)
+        and (.dcgmExporter.config == {"name": $dcgmConfig})
+        and (.dcgmExporter.env == [
+            {"name": "DCGM_EXPORTER_INTERVAL", "value": "1000"},
+            {"name": "DCGM_EXPORTER_COLLECTORS", "value": $dcgmCollectors}
+        ])
         and (.mig.strategy == "none")
         and (.migManager.enabled == false)
         and (.driver.version == $driverVersion)
+        and (((.kip | has("dcgmExporterEnabled")) | not)
+            or (.kip.dcgmExporterEnabled == $dcgmEnabled))
         and any(.toolkit.env[];
             .name == "CONTAINERD_CONFIG" and .value == "/etc/containerd/config.toml")
         and any(.toolkit.env[];
@@ -97,12 +145,30 @@ kip_gpu_release_is_exact() {
         true | false) ;;
         *) return 1 ;;
     esac
-    [ "$status" = deployed ] \
-        && [ "$chart" = "gpu-operator-$KIP_GPU_OPERATOR_VERSION" ] \
+    [ "$chart" = "gpu-operator-$KIP_GPU_OPERATOR_VERSION" ] \
         && [ "$recorded_mode" = "$KIP_GPU_DRIVER_MODE" ] \
         && [ "$recorded_digest" = "$KIP_GPU_OPERATOR_CHART_DIGEST" ] \
         && [ "$driver_enabled" = "$expected_driver_enabled" ] \
         && [ "$baseline_matches" = true ]
+}
+
+kip_gpu_release_is_exact_for_dcgm_state() {
+    local status status_json
+
+    kip_gpu_release_identity_exact_for_dcgm_state "$1" || return 1
+    status_json=$(kip_gpu_helm_status_json) || return 1
+    status=$(printf '%s' "$status_json" | kip_exec jq -er '.info.status') || return 1
+    [ "$status" = deployed ]
+}
+
+kip_gpu_release_identity_exact() {
+    kip_gpu_release_identity_exact_for_dcgm_state false \
+        || kip_gpu_release_identity_exact_for_dcgm_state true
+}
+
+kip_gpu_release_is_exact() {
+    kip_gpu_release_is_exact_for_dcgm_state false \
+        || kip_gpu_release_is_exact_for_dcgm_state true
 }
 
 kip_gpu_resolve_mode() {

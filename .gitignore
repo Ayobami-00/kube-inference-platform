@@ -32,3 +32,7 @@ deploy/**/secrets.local.yaml
 .huggingface/
 models/
 experiments/**/raw/
+benchmarks/.work/
+benchmarks/reports/**/raw/
+benchmarks/reports/**/*.jsonl
+benchmarks/reports/**/*.trace

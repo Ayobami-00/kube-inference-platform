@@ -6,12 +6,16 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 KIP_DEPLOY_ROOT=$SCRIPT_DIR
 readonly KIP_DEPLOY_ROOT
+KIP_REPOSITORY_ROOT=$(cd "$KIP_DEPLOY_ROOT/.." && pwd)
+readonly KIP_REPOSITORY_ROOT
 KIP_CLUSTER_ROOT="$KIP_DEPLOY_ROOT/cluster"
 readonly KIP_CLUSTER_ROOT
 KIP_GPU_ROOT="$KIP_DEPLOY_ROOT/gpu"
 readonly KIP_GPU_ROOT
 KIP_RUNTIME_ROOT="$KIP_DEPLOY_ROOT/runtime/vllm"
 readonly KIP_RUNTIME_ROOT
+KIP_OBSERVABILITY_ROOT="$KIP_DEPLOY_ROOT/observability"
+readonly KIP_OBSERVABILITY_ROOT
 
 # shellcheck source=deploy/lib/ui.sh
 source "$KIP_DEPLOY_ROOT/lib/ui.sh"
@@ -21,6 +25,8 @@ source "$KIP_CLUSTER_ROOT/versions.env"
 source "$KIP_GPU_ROOT/versions.env"
 # shellcheck source=deploy/runtime/vllm/versions.env
 source "$KIP_RUNTIME_ROOT/versions.env"
+# shellcheck source=deploy/observability/versions.env
+source "$KIP_OBSERVABILITY_ROOT/versions.env"
 # shellcheck source=deploy/cluster/lib/common.sh
 source "$KIP_CLUSTER_ROOT/lib/common.sh"
 # shellcheck source=deploy/cluster/lib/preflight.sh
@@ -39,6 +45,18 @@ KIP_DESTROY_STATE_FILE="$KIP_DESTROY_STATE_DIR/destroying"
 KIP_RUNTIME_NAMESPACE="kip-runtime"
 KIP_RUNTIME_RESOURCE_NAME="vllm-qwen25-7b"
 KIP_RUNTIME_PROFILE_FILE="$KIP_RUNTIME_ROOT/profiles/qwen2.5-7b-instruct.json"
+KIP_BENCHMARK_NAMESPACE="kip-benchmark"
+KIP_BENCHMARK_RESULTS_VOLUME="kip-benchmark-results"
+if [ "${KIP_TESTING:-0}" = 1 ]; then
+    KIP_BENCHMARK_WORK_DIR=${KIP_BENCHMARK_WORK_DIR:-$KIP_REPOSITORY_ROOT/benchmarks/.work}
+else
+    # This path is deleted during teardown. Keep the production target fixed beneath
+    # the checked-out repository instead of accepting an arbitrary environment path.
+    KIP_BENCHMARK_WORK_DIR="$KIP_REPOSITORY_ROOT/benchmarks/.work"
+fi
+KIP_OBSERVABILITY_STORAGE_CLASS="kip-local-static"
+KIP_OBSERVABILITY_VOLUMES="kip-prometheus kip-alertmanager kip-grafana"
+KIP_DESTROY_PREFLIGHT_ERROR=""
 
 kip_ui_init
 kip_cluster_validate_boolean VERBOSE "$KIP_VERBOSE"
@@ -77,12 +95,19 @@ kip_destroy_has_cluster_state() {
 }
 
 kip_destroy_has_runtime_residue() {
-    local bpf_entries links namespaces rules
+    local benchmark_work bpf_entries links namespaces rules
 
     [ -e "$KIP_OPT_ROOT/cni/bin/cilium-cni" ] && return 0
     [ -e "$KIP_RUN_ROOT/cilium" ] && return 0
     [ -e "$KIP_RUN_ROOT/nvidia" ] && return 0
     [ -e "$KIP_DESTROY_STATE_DIR/model-cache" ] && return 0
+    [ -e "$KIP_DESTROY_STATE_DIR/benchmark-results" ] && return 0
+    [ -e "$KIP_DESTROY_STATE_DIR/observability" ] && return 0
+    if [ -e "$KIP_BENCHMARK_WORK_DIR" ]; then
+        benchmark_work=$(kip_exec find "$KIP_BENCHMARK_WORK_DIR" \
+            -mindepth 1 -print -quit 2>/dev/null || true)
+        [ -n "$benchmark_work" ] && return 0
+    fi
     [ -e "$KIP_SYS_FS_BPF_ROOT/cilium" ] && return 0
     if [ "$KIP_USE_SUDO" = "1" ]; then
         bpf_entries=$(kip_run_privileged find "$KIP_SYS_FS_BPF_ROOT/tc/globals" \
@@ -142,15 +167,375 @@ kip_destroy_helm_release_exists() {
         --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" >/dev/null 2>&1
 }
 
-kip_destroy_gpu_release_is_owned() {
-    local values
+kip_destroy_namespace_exists() {
+    local namespace=$1 name
 
-    values=$(kip_run_privileged helm get values gpu-operator \
+    name=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get namespace "$namespace" -o 'jsonpath={.metadata.name}' 2>/dev/null) \
+        || return 1
+    [ "$name" = "$namespace" ]
+}
+
+kip_destroy_resource_exists() {
+    local kind=$1 name=$2 namespace=${3:-} recorded
+
+    if [ -n "$namespace" ]; then
+        recorded=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$namespace" get "$kind" "$name" \
+            -o 'jsonpath={.metadata.name}' 2>/dev/null) || return 1
+    else
+        recorded=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get "$kind" "$name" -o 'jsonpath={.metadata.name}' 2>/dev/null) \
+            || return 1
+    fi
+    [ "$recorded" = "$name" ]
+}
+
+kip_destroy_resource_is_owned() {
+    local kind=$1 name=$2 namespace=${3:-} owner
+
+    if [ -n "$namespace" ]; then
+        owner=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$namespace" get "$kind" "$name" \
+            -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/managed-by}' \
+            2>/dev/null) || return 1
+    else
+        owner=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get "$kind" "$name" \
+            -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/managed-by}' \
+            2>/dev/null) || return 1
+    fi
+    [ "$owner" = kube-inference-platform ]
+}
+
+kip_destroy_namespace_contents_are_owned() {
+    local allowed_releases=${2:-} namespace=$1 output resource resources
+
+    resources=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        api-resources --verbs=list --namespaced=true -o name 2>/dev/null) || return 1
+    [ -n "$resources" ] || return 1
+    while IFS= read -r resource; do
+        [ -n "$resource" ] || continue
+        output=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n "$namespace" get "$resource" -o json 2>/dev/null) || return 1
+        printf '%s' "$output" | kip_exec jq -e \
+            --arg namespace "$namespace" --arg releases "$allowed_releases" '
+            def allowed_releases: ($releases | split(" ") | map(select(length > 0)));
+            def kip_owned:
+                .metadata.labels["app.kubernetes.io/managed-by"]
+                    == "kube-inference-platform";
+            def exact_helm_release:
+                (.metadata.annotations["meta.helm.sh/release-namespace"] // "")
+                    == $namespace
+                and ((.metadata.annotations["meta.helm.sh/release-name"] // "") as $release
+                    | (allowed_releases | index($release)) != null);
+            def exact_helm_record:
+                .kind == "Secret"
+                and (.metadata.labels.owner // "") == "helm"
+                and ((.metadata.labels.name // "") as $release
+                    | (allowed_releases | index($release)) != null);
+            def generated_child:
+                ((.metadata.ownerReferences // []) | length) > 0
+                or .kind == "Event"
+                or (.kind == "ServiceAccount" and .metadata.name == "default")
+                or (.kind == "ConfigMap" and .metadata.name == "kube-root-ca.crt")
+                or ((.metadata.labels["endpoints.kubernetes.io/managed-by"] // "")
+                    | length) > 0
+                or ((.metadata.labels["endpointslice.kubernetes.io/managed-by"] // "")
+                    | length) > 0;
+            all(.items[]?; kip_owned or exact_helm_release or exact_helm_record
+                or generated_child)
+        ' >/dev/null || return 1
+    done <<EOF
+$resources
+EOF
+}
+
+kip_destroy_directory_is_owned_or_absent() {
+    local expected=$2 marker path=$1 recorded
+
+    marker="$path/.kip-managed-v1"
+    if ! kip_run_privileged test -e "$path"; then
+        ! kip_run_privileged test -L "$path"
+        return
+    fi
+    kip_run_privileged test -d "$path" || return 1
+    ! kip_run_privileged test -L "$path" || return 1
+    kip_run_privileged test -f "$marker" || return 1
+    ! kip_run_privileged test -L "$marker" || return 1
+    recorded=$(kip_run_privileged sed -n 'p' "$marker" 2>/dev/null) || return 1
+    [ "$recorded" = "$expected" ]
+}
+
+kip_destroy_release_chart_is_owned() {
+    local actual_chart expected_chart=$3 expected_digest=$4 namespace=$2 release=$1
+    local recorded_digest releases values
+
+    releases=$(kip_run_privileged helm list \
+        --namespace "$namespace" --filter "^${release}$" --output json \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>/dev/null) || return 1
+    actual_chart=$(printf '%s' "$releases" | kip_exec jq -er \
+        --arg release "$release" --arg namespace "$namespace" '
+            .[] | select(.name == $release and .namespace == $namespace) | .chart
+        ') || return 1
+    values=$(kip_run_privileged helm get values "$release" \
+        --namespace "$namespace" --output json \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>/dev/null) || return 1
+    recorded_digest=$(printf '%s' "$values" | kip_exec jq -er '
+        select(.kip.managedBy == "kube-inference-platform") | .kip.chartDigest
+    ') || return 1
+    [ "$actual_chart" = "$expected_chart" ] \
+        && [ "$recorded_digest" = "$expected_digest" ]
+}
+
+kip_destroy_monitoring_crds_exist() {
+    local crd
+
+    for crd in $KIP_MONITORING_CRDS; do
+        kip_destroy_resource_exists customresourcedefinition "$crd" && return 0
+    done
+    return 1
+}
+
+kip_destroy_monitoring_crds_are_owned() {
+    local crd digest owner output
+
+    for crd in $KIP_MONITORING_CRDS; do
+        kip_destroy_resource_exists customresourcedefinition "$crd" || return 1
+        owner=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get customresourcedefinition "$crd" \
+            -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/managed-by}' \
+            2>/dev/null) || return 1
+        digest=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get customresourcedefinition "$crd" \
+            -o 'jsonpath={.metadata.annotations.kube-inference-platform\.io/chart-digest}' \
+            2>/dev/null) || return 1
+        [ "$owner" = kube-inference-platform ] \
+            && [ "$digest" = "$KIP_KUBE_PROMETHEUS_STACK_DIGEST" ] \
+            || return 1
+        output=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get "$crd" --all-namespaces -o json 2>/dev/null) || return 1
+        printf '%s' "$output" | kip_exec jq -e \
+            --arg namespace "$KIP_OBSERVABILITY_NAMESPACE" \
+            --arg release "$KIP_MONITORING_RELEASE" '
+            all(.items[]?;
+                .metadata.namespace == $namespace
+                and (
+                    .metadata.labels["app.kubernetes.io/managed-by"]
+                        == "kube-inference-platform"
+                    or (
+                        .metadata.annotations["meta.helm.sh/release-name"] == $release
+                        and .metadata.annotations["meta.helm.sh/release-namespace"]
+                            == $namespace
+                    )
+                )
+            )
+        ' >/dev/null || return 1
+    done
+}
+
+kip_destroy_benchmark_exists() {
+    kip_destroy_namespace_exists "$KIP_BENCHMARK_NAMESPACE" \
+        || kip_destroy_resource_exists persistentvolume "$KIP_BENCHMARK_RESULTS_VOLUME"
+}
+
+kip_destroy_benchmark_is_owned() {
+    if kip_destroy_namespace_exists "$KIP_BENCHMARK_NAMESPACE"; then
+        kip_destroy_resource_is_owned namespace "$KIP_BENCHMARK_NAMESPACE" || return 1
+        if kip_destroy_resource_exists persistentvolumeclaim \
+            "$KIP_BENCHMARK_RESULTS_VOLUME" "$KIP_BENCHMARK_NAMESPACE"; then
+            kip_destroy_resource_is_owned persistentvolumeclaim \
+                "$KIP_BENCHMARK_RESULTS_VOLUME" "$KIP_BENCHMARK_NAMESPACE" || return 1
+        fi
+        if kip_destroy_resource_exists serviceaccount kip-benchmark \
+            "$KIP_BENCHMARK_NAMESPACE"; then
+            kip_destroy_resource_is_owned serviceaccount kip-benchmark \
+                "$KIP_BENCHMARK_NAMESPACE" || return 1
+        fi
+    fi
+    if kip_destroy_resource_exists persistentvolume "$KIP_BENCHMARK_RESULTS_VOLUME"; then
+        kip_destroy_resource_is_owned persistentvolume \
+            "$KIP_BENCHMARK_RESULTS_VOLUME" || return 1
+    fi
+    if kip_destroy_namespace_exists "$KIP_BENCHMARK_NAMESPACE"; then
+        kip_destroy_namespace_contents_are_owned "$KIP_BENCHMARK_NAMESPACE" || return 1
+    fi
+}
+
+kip_destroy_observability_exists() {
+    local volume
+
+    kip_destroy_resource_exists service kip-cilium-agent-metrics kube-system && return 0
+    kip_destroy_resource_exists service kip-cilium-operator-metrics kube-system && return 0
+    kip_destroy_namespace_exists "$KIP_OBSERVABILITY_NAMESPACE" && return 0
+    kip_destroy_helm_release_exists "$KIP_MONITORING_RELEASE" \
+        "$KIP_OBSERVABILITY_NAMESPACE" && return 0
+    kip_destroy_helm_release_exists "$KIP_OPENCOST_RELEASE" \
+        "$KIP_OBSERVABILITY_NAMESPACE" && return 0
+    kip_destroy_monitoring_crds_exist && return 0
+    kip_destroy_resource_exists storageclass "$KIP_OBSERVABILITY_STORAGE_CLASS" && return 0
+    for volume in $KIP_OBSERVABILITY_VOLUMES; do
+        kip_destroy_resource_exists persistentvolume "$volume" && return 0
+    done
+    return 1
+}
+
+kip_destroy_observability_is_owned() {
+    local release service volume
+
+    for service in kip-cilium-agent-metrics kip-cilium-operator-metrics; do
+        if kip_destroy_resource_exists service "$service" kube-system; then
+            kip_destroy_resource_is_owned service "$service" kube-system || return 1
+        fi
+    done
+
+    if kip_destroy_namespace_exists "$KIP_OBSERVABILITY_NAMESPACE"; then
+        kip_destroy_resource_is_owned namespace "$KIP_OBSERVABILITY_NAMESPACE" || return 1
+    fi
+    for release in "$KIP_OPENCOST_RELEASE" "$KIP_MONITORING_RELEASE"; do
+        if kip_destroy_helm_release_exists "$release" "$KIP_OBSERVABILITY_NAMESPACE"; then
+            case "$release" in
+                "$KIP_OPENCOST_RELEASE")
+                    kip_destroy_release_chart_is_owned "$release" \
+                        "$KIP_OBSERVABILITY_NAMESPACE" \
+                        "opencost-$KIP_OPENCOST_CHART_VERSION" \
+                        "$KIP_OPENCOST_CHART_DIGEST" || return 1
+                    ;;
+                "$KIP_MONITORING_RELEASE")
+                    kip_destroy_release_chart_is_owned "$release" \
+                        "$KIP_OBSERVABILITY_NAMESPACE" \
+                        "kube-prometheus-stack-$KIP_KUBE_PROMETHEUS_STACK_VERSION" \
+                        "$KIP_KUBE_PROMETHEUS_STACK_DIGEST" || return 1
+                    ;;
+            esac
+        fi
+    done
+    if kip_destroy_resource_exists storageclass "$KIP_OBSERVABILITY_STORAGE_CLASS"; then
+        kip_destroy_resource_is_owned storageclass \
+            "$KIP_OBSERVABILITY_STORAGE_CLASS" || return 1
+    fi
+    for volume in $KIP_OBSERVABILITY_VOLUMES; do
+        if kip_destroy_resource_exists persistentvolume "$volume"; then
+            kip_destroy_resource_is_owned persistentvolume "$volume" || return 1
+        fi
+    done
+    if kip_destroy_monitoring_crds_exist; then
+        kip_destroy_monitoring_crds_are_owned || return 1
+    fi
+    if kip_destroy_namespace_exists "$KIP_OBSERVABILITY_NAMESPACE"; then
+        kip_destroy_namespace_contents_are_owned "$KIP_OBSERVABILITY_NAMESPACE" \
+            "$KIP_MONITORING_RELEASE $KIP_OPENCOST_RELEASE" || return 1
+    fi
+}
+
+kip_destroy_gpu_release_is_owned() {
+    local chart driver_enabled expected_driver_enabled list_json recorded_digest recorded_mode
+    local status status_json values_json
+
+    status_json=$(kip_run_privileged helm status gpu-operator \
         --namespace gpu-operator --output json \
         --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>/dev/null) || return 1
-    printf '%s' "$values" \
-        | command grep -Eq \
-            "\"chartDigest\"[[:space:]]*:[[:space:]]*\"$KIP_GPU_OPERATOR_CHART_DIGEST\""
+    list_json=$(kip_run_privileged helm list --namespace gpu-operator \
+        --filter '^gpu-operator$' --output json \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>/dev/null) || return 1
+    values_json=$(kip_run_privileged helm get values gpu-operator \
+        --namespace gpu-operator --output json \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>/dev/null) || return 1
+    status=$(printf '%s' "$status_json" | kip_exec jq -er '.info.status') || return 1
+    chart=$(printf '%s' "$list_json" | kip_exec jq -er '
+        .[] | select(.name == "gpu-operator" and .namespace == "gpu-operator") | .chart
+    ') || return 1
+    recorded_mode=$(printf '%s' "$values_json" | kip_exec jq -er \
+        '.kip.driverMode | select(. == "operator" or . == "preinstalled")') || return 1
+    recorded_digest=$(printf '%s' "$values_json" | kip_exec jq -er '.kip.chartDigest') \
+        || return 1
+    driver_enabled=$(printf '%s' "$values_json" | kip_exec jq -er \
+        '.driver.enabled | select(type == "boolean") | tostring') || return 1
+    [ "$recorded_mode" = operator ] && expected_driver_enabled=true \
+        || expected_driver_enabled=false
+    case "$status" in
+        deployed | failed | pending-install | pending-upgrade | pending-rollback) ;;
+        *) return 1 ;;
+    esac
+    [ "$chart" = "gpu-operator-$KIP_GPU_OPERATOR_VERSION" ] \
+        && [ "$recorded_digest" = "$KIP_GPU_OPERATOR_CHART_DIGEST" ] \
+        && [ "$driver_enabled" = "$expected_driver_enabled" ] \
+        && printf '%s' "$values_json" | kip_exec jq -e \
+            --arg dcgmRepository "$KIP_DCGM_EXPORTER_REPOSITORY" \
+            --arg dcgmImage "$KIP_DCGM_EXPORTER_IMAGE" \
+            --arg dcgmVersion "$KIP_DCGM_EXPORTER_PINNED_VERSION" \
+            --arg dcgmConfig "$KIP_DCGM_METRICS_CONFIG_NAME" \
+            --arg dcgmCollectors "$KIP_DCGM_METRICS_COLLECTOR_PATH" \
+            --arg driverVersion "$KIP_NVIDIA_DRIVER_VERSION" '
+            ((keys - ["clusterPolicy", "gpuCluster", "psa", "nfd", "cdi",
+                "sandboxWorkloads", "driver", "toolkit", "devicePlugin", "gfd",
+                "dcgm", "dcgmExporter", "mig", "migManager", "gds", "gdrcopy",
+                "vgpuManager", "vgpuDeviceManager", "vfioManager", "kataManager",
+                "sandboxDevicePlugin", "kataSandboxDevicePlugin", "ccManager", "kip"])
+                | length == 0)
+            and ((.dcgmExporter | keys
+                - ["enabled", "repository", "image", "version", "serviceMonitor", "config", "env"])
+                | length == 0)
+            and ((.kip | keys
+                - ["driverMode", "chartDigest", "dcgmExporterEnabled"])
+                | length == 0)
+            and .clusterPolicy.deployCR == true
+            and .gpuCluster.deployCR == false
+            and .psa.enabled == true
+            and .nfd.enabled == true
+            and .cdi.enabled == true
+            and .cdi.nriPluginEnabled == false
+            and .toolkit.enabled == true
+            and .devicePlugin.enabled == true
+            and .dcgm.enabled == false
+            and (.dcgmExporter.enabled | type == "boolean")
+            and .dcgmExporter.repository == $dcgmRepository
+            and .dcgmExporter.image == $dcgmImage
+            and .dcgmExporter.version == $dcgmVersion
+            and .dcgmExporter.serviceMonitor.enabled == false
+            and .dcgmExporter.config == {"name": $dcgmConfig}
+            and .dcgmExporter.env == [
+                {"name": "DCGM_EXPORTER_INTERVAL", "value": "1000"},
+                {"name": "DCGM_EXPORTER_COLLECTORS", "value": $dcgmCollectors}
+            ]
+            and .mig.strategy == "none"
+            and .migManager.enabled == false
+            and .driver.version == $driverVersion
+            and (((.kip | has("dcgmExporterEnabled")) | not)
+                or .kip.dcgmExporterEnabled == .dcgmExporter.enabled)
+            and any(.toolkit.env[];
+                .name == "CONTAINERD_CONFIG" and .value == "/etc/containerd/config.toml")
+            and any(.toolkit.env[];
+                .name == "CONTAINERD_SOCKET" and .value == "/run/containerd/containerd.sock")
+            and any(.toolkit.env[];
+                .name == "RUNTIME_CONFIG_SOURCE"
+                and .value == "file=/etc/containerd/config.toml")
+            and any(.toolkit.env[];
+                .name == "RUNTIME_DROP_IN_CONFIG"
+                and .value == "/etc/containerd/conf.d/99-nvidia.toml")
+        ' >/dev/null
+}
+
+kip_destroy_gpu_exists() {
+    kip_destroy_namespace_exists gpu-operator \
+        || kip_destroy_helm_release_exists gpu-operator gpu-operator
+}
+
+kip_destroy_gpu_is_owned() {
+    kip_destroy_helm_release_exists gpu-operator gpu-operator || return 1
+    kip_destroy_gpu_release_is_owned || return 1
+    kip_destroy_namespace_exists gpu-operator || return 1
+    kip_destroy_namespace_contents_are_owned gpu-operator gpu-operator
 }
 
 kip_destroy_runtime_exists() {
@@ -234,24 +619,157 @@ kip_destroy_runtime_is_owned() {
             -o 'jsonpath={.metadata.annotations.kube-inference-platform/model-revision}' \
             2>/dev/null)" = "$model_revision" ] || return 1
     done
+    kip_destroy_namespace_contents_are_owned "$KIP_RUNTIME_NAMESPACE"
 }
 
-kip_destroy_cluster_releases() {
-    local output
+kip_destroy_cluster_scope_is_safe() {
+    local namespaces persistent_volumes workloads
 
+    namespaces=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get namespaces -o json 2>/dev/null) || return 1
+    printf '%s' "$namespaces" | kip_exec jq -e \
+        --arg benchmark "$KIP_BENCHMARK_NAMESPACE" \
+        --arg observability "$KIP_OBSERVABILITY_NAMESPACE" \
+        --arg runtime "$KIP_RUNTIME_NAMESPACE" '
+        all(.items[]?; .metadata.name as $name
+            | ["default", "kube-system", "kube-public", "kube-node-lease",
+                "gpu-operator", $benchmark, $observability, $runtime]
+            | index($name) != null)
+    ' >/dev/null || return 1
+
+    workloads=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get deployments,statefulsets,daemonsets,jobs,cronjobs,pods \
+        --all-namespaces -o json 2>/dev/null) || return 1
+    printf '%s' "$workloads" | kip_exec jq -e \
+        --arg benchmark "$KIP_BENCHMARK_NAMESPACE" \
+        --arg observability "$KIP_OBSERVABILITY_NAMESPACE" \
+        --arg runtime "$KIP_RUNTIME_NAMESPACE" '
+        all(.items[]?;
+            .metadata.namespace as $namespace
+            | .metadata.name as $name
+            | if (["gpu-operator", $benchmark, $observability, $runtime]
+                    | index($namespace)) != null then
+                true
+              elif $namespace == "kube-system" then
+                ($name | test("^(coredns|kube-proxy|cilium($|-)|cilium-operator($|-)|kube-apiserver-|kube-controller-manager-|kube-scheduler-|etcd-)"))
+              else
+                false
+              end)
+    ' >/dev/null || return 1
+
+    persistent_volumes=$(kip_run_privileged kubectl \
+        --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+        get persistentvolumes -o json 2>/dev/null) || return 1
+    printf '%s' "$persistent_volumes" | kip_exec jq -e '
+        all(.items[]?;
+            .metadata.labels["app.kubernetes.io/managed-by"]
+                == "kube-inference-platform")
+    ' >/dev/null
+}
+
+kip_destroy_ownership_preflight() {
+    if ! kip_destroy_directory_is_owned_or_absent \
+        "$KIP_DESTROY_STATE_DIR/benchmark-results" \
+        "kube-inference-platform benchmark results v1" \
+        || ! kip_destroy_directory_is_owned_or_absent \
+            "$KIP_DESTROY_STATE_DIR/observability" \
+            "kube-inference-platform observability storage v1" \
+        || ! kip_destroy_directory_is_owned_or_absent \
+            "$KIP_DESTROY_STATE_DIR/model-cache" \
+            "kube-inference-platform model cache v1"; then
+        KIP_DESTROY_PREFLIGHT_ERROR="A project-named host storage directory is unmarked or has an invalid ownership marker."
+        return 1
+    fi
     if ! kip_destroy_api_ready; then
         kip_note "Kubernetes API is unavailable; kubeadm reset will remove local cluster state."
         return 0
     fi
+    if ! kip_destroy_cluster_scope_is_safe; then
+        KIP_DESTROY_PREFLIGHT_ERROR="The cluster contains a non-system namespace, foreign workload, or unmanaged persistent volume."
+        return 1
+    fi
+    if kip_destroy_benchmark_exists && ! kip_destroy_benchmark_is_owned; then
+        KIP_DESTROY_PREFLIGHT_ERROR="A platform release is unmanaged: benchmark state drifted or its namespace contains foreign objects."
+        return 1
+    fi
+    if kip_destroy_observability_exists && ! kip_destroy_observability_is_owned; then
+        KIP_DESTROY_PREFLIGHT_ERROR="A platform release is unmanaged: observability state drifted or shares its namespace with foreign objects."
+        return 1
+    fi
+    if kip_destroy_runtime_exists && ! kip_destroy_runtime_is_owned; then
+        KIP_DESTROY_PREFLIGHT_ERROR="A platform release is unmanaged: runtime state drifted or shares its namespace with foreign objects."
+        return 1
+    fi
+    if kip_destroy_gpu_exists && ! kip_destroy_gpu_is_owned; then
+        KIP_DESTROY_PREFLIGHT_ERROR="A platform release is unmanaged: GPU Operator state drifted or shares its namespace with foreign objects."
+        return 1
+    fi
+}
+
+kip_destroy_cluster_releases() {
+    local output release volume
+
+    kip_destroy_api_ready || return 0
+    if kip_destroy_benchmark_exists; then
+        kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            delete namespace "$KIP_BENCHMARK_NAMESPACE" \
+            --wait=true --timeout=10m >/dev/null || return 1
+        kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            delete persistentvolume "$KIP_BENCHMARK_RESULTS_VOLUME" \
+            --ignore-not-found=true --wait=true --timeout=5m >/dev/null || return 1
+    fi
+    if kip_destroy_observability_exists; then
+        kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n kube-system delete service \
+            kip-cilium-agent-metrics kip-cilium-operator-metrics \
+            --ignore-not-found=true --wait=true --timeout=5m >/dev/null || return 1
+        for release in "$KIP_OPENCOST_RELEASE" "$KIP_MONITORING_RELEASE"; do
+            if kip_destroy_helm_release_exists "$release" "$KIP_OBSERVABILITY_NAMESPACE"; then
+                output=$(kip_run_privileged helm uninstall "$release" \
+                    --namespace "$KIP_OBSERVABILITY_NAMESPACE" --wait --timeout 10m \
+                    --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>&1) || return 1
+                kip_verbose_output "helm uninstall $release" "$output"
+            fi
+        done
+        if kip_destroy_namespace_exists "$KIP_OBSERVABILITY_NAMESPACE"; then
+            kip_run_privileged kubectl \
+                --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+                delete namespace "$KIP_OBSERVABILITY_NAMESPACE" \
+                --wait=true --timeout=10m >/dev/null || return 1
+        fi
+        for volume in $KIP_OBSERVABILITY_VOLUMES; do
+            kip_run_privileged kubectl \
+                --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+                delete persistentvolume "$volume" --ignore-not-found=true \
+                --wait=true --timeout=5m >/dev/null || return 1
+        done
+        kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            delete storageclass "$KIP_OBSERVABILITY_STORAGE_CLASS" \
+            --ignore-not-found=true --wait=true --timeout=5m >/dev/null || return 1
+        if kip_destroy_monitoring_crds_exist; then
+            # Helm deliberately retains CRDs. Remove only the exact set carrying
+            # KIP's immutable chart digest after namespaced custom resources are gone.
+            for crd in $KIP_MONITORING_CRDS; do
+                kip_run_privileged kubectl \
+                    --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+                    delete customresourcedefinition "$crd" \
+                    --wait=true --timeout=5m >/dev/null || return 1
+            done
+        fi
+    fi
     if kip_destroy_runtime_exists; then
-        kip_destroy_runtime_is_owned || return 1
         kip_run_privileged kubectl \
             --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
             delete namespace "$KIP_RUNTIME_NAMESPACE" --wait=true --timeout=10m >/dev/null \
             || return 1
     fi
-    if kip_destroy_helm_release_exists gpu-operator gpu-operator; then
-        kip_destroy_gpu_release_is_owned || return 1
+    if kip_destroy_gpu_exists; then
         output=$(kip_run_privileged helm uninstall gpu-operator \
             --namespace gpu-operator --wait --timeout 10m \
             --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" 2>&1) || return 1
@@ -394,8 +912,11 @@ EOF
         "$KIP_VAR_ROOT/lib/containerd" \
         "$KIP_VAR_ROOT/lib/etcd" \
         "$KIP_VAR_ROOT/lib/kubelet" \
+        "$KIP_DESTROY_STATE_DIR/benchmark-results" \
+        "$KIP_DESTROY_STATE_DIR/observability" \
         "$KIP_DESTROY_STATE_DIR/model-cache" \
         "$KIP_USR_LOCAL_BIN/../nvidia/toolkit"
+    kip_run_privileged rm -rf "$KIP_BENCHMARK_WORK_DIR"
     kip_run_privileged rm -f "$KIP_OPT_ROOT/cni/bin/cilium-cni"
 }
 
@@ -478,6 +999,12 @@ else
     exit 1
 fi
 
+if ! kip_destroy_ownership_preflight; then
+    kip_record FAIL "Platform workloads" "$KIP_DESTROY_PREFLIGHT_ERROR Refusing teardown."
+    kip_summary "Platform teardown"
+    exit 1
+fi
+
 if kip_make_directory "$KIP_DESTROY_STATE_DIR" 0755 \
     && kip_run_privileged touch "$KIP_DESTROY_STATE_FILE"; then
     :
@@ -488,11 +1015,11 @@ else
 fi
 
 if kip_destroy_cluster_releases; then
-    kip_record PASS "Cluster releases" \
-        "KIP-managed runtime and GPU Operator removed; Cilium retained through kubeadm reset."
+    kip_record PASS "Platform workloads" \
+        "KIP-managed benchmark, observability, runtime, and GPU workloads were removed."
 else
-    kip_record FAIL "Cluster releases" \
-        "A runtime or release is unmanaged or could not be removed safely."
+    kip_record FAIL "Platform workloads" \
+        "A release is unmanaged, a namespace or volume conflicts, or removal failed."
     kip_summary "Platform teardown"
     exit 1
 fi
@@ -532,8 +1059,15 @@ fi
 if ! kip_destroy_has_cluster_state \
     && ! kip_destroy_has_runtime_residue \
     && [ ! -e "$KIP_ETC_ROOT/sysctl.d/99-kube-inference-platform.conf" ]; then
-    kip_run_privileged rm -rf "$KIP_DESTROY_STATE_DIR"
-    kip_record PASS "Final verification" "The host is ready for a fresh host-to-runtime bootstrap."
+    kip_run_privileged rm -f "$KIP_DESTROY_STATE_FILE"
+    if kip_run_privileged rmdir "$KIP_DESTROY_STATE_DIR"; then
+        kip_record PASS "Final verification" "The host is ready for a fresh complete v0.1 bootstrap."
+    else
+        kip_record FAIL "Final verification" \
+            "Unrecognized files remain in the project state directory; refusing recursive deletion."
+        kip_summary "Platform teardown"
+        exit 1
+    fi
 else
     kip_record FAIL "Final verification" "KIP-managed cluster state remains on the host."
     kip_summary "Platform teardown"
@@ -541,5 +1075,5 @@ else
 fi
 
 kip_summary "Platform teardown"
-printf '\n%sReady for a fresh run:%s make host-setup, make cluster-bootstrap, make gpu-install, then make runtime-deploy.\n' \
+printf '\n%sReady for a fresh run:%s make bootstrap; add COST_PROFILE once reviewed pricing is configured.\n' \
     "$KIP_COLOR_GREEN" "$KIP_COLOR_RESET"

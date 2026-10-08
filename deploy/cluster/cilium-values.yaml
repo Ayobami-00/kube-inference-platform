@@ -14,9 +14,19 @@ ipv6:
 
 operator:
   replicas: 1
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
 
 hubble:
   enabled: false
 
 cni:
   exclusive: true
+# Metrics are exposed here and discovered by KIP-owned ServiceMonitors after the
+# observability milestone is installed. Hubble remains intentionally disabled.
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: false
