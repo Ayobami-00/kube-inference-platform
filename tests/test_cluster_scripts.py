@@ -85,7 +85,7 @@ def cluster_fixture(tmp_path: Path) -> dict[str, Path]:
         """case "${1:-}" in
     -m) printf '%s\\n' "${KIP_TEST_ARCH:-x86_64}" ;;
     -r) printf '%s\\n' "${KIP_TEST_KERNEL:-6.8.0-test}" ;;
-esac""",
+    esac""",
     )
     write_command(command_dir, "hostname", "printf '%s\\n' \"${KIP_TEST_HOSTNAME:-gpu-node-1}\"")
     write_command(command_dir, "ps", "printf '%s\\n' systemd")
@@ -951,6 +951,56 @@ def test_unrelated_runtime_package_fails_before_mutation(
         else ""
     )
     assert "apt-get" not in commands
+
+
+@pytest.mark.parametrize(
+    ("config", "ctr_output", "expected"),
+    [
+        ('# stock Docker package\ndisabled_plugins = ["cri"]\n', "", 0),
+        ('version = 2\ndisabled_plugins = ["cri"]\n', "", 1),
+        ('disabled_plugins = ["cri"]\n', "occupied", 1),
+    ],
+)
+def test_only_empty_stock_containerd_can_be_adopted(
+    cluster_fixture: dict[str, Path], config: str, ctr_output: str, expected: int
+) -> None:
+    containerd_dir = cluster_fixture["etc_root"] / "containerd"
+    containerd_dir.mkdir()
+    (containerd_dir / "config.toml").write_text(config)
+    write_command(
+        cluster_fixture["command_dir"],
+        "ctr",
+        """case "$*" in
+    'namespaces list --quiet')
+        [ "${KIP_TEST_CTR_OUTPUT:-}" = occupied ] && printf '%s\\n' default
+        ;;
+    '-n default images list --quiet')
+        [ "${KIP_TEST_CTR_OUTPUT:-}" = occupied ] && printf '%s\\n' image
+        ;;
+esac
+exit 0""",
+    )
+    script = """
+source deploy/cluster/lib/runtime.sh
+kip_package_installed() { [ "$1" = containerd.io ]; }
+kip_package_version() { printf '%s' 1.7.27-1; }
+kip_containerd_package_version() { printf '%s' 2.3.4; }
+kip_has_command() { command -v "$1" >/dev/null 2>&1; }
+kip_exec() { "$@"; }
+kip_cluster_kernel_preparation_is_owned() { return 1; }
+kip_check_runtime_conflicts
+"""
+    environment = cluster_environment(cluster_fixture, KIP_TEST_CTR_OUTPUT=ctr_output)
+    environment["PATH"] = f"{cluster_fixture['command_dir']}:{environment['PATH']}"
+    result = subprocess.run(
+        ["/bin/bash", "-c", script],
+        cwd=ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == expected, result.stderr
 
 
 def test_unmanaged_containerd_config_fails_before_mutation(

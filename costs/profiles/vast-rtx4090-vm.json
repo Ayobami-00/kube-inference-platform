@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "vast-rtx4090-vm",
+  "currency": "USD",
+  "nodeHourlyRateUsd": 0.998,
+  "provider": "Vast.ai",
+  "machineType": "1x NVIDIA GeForce RTX 4090 48 GiB VM, 30 vCPU, 98 GiB RAM",
+  "region": "provider-not-disclosed",
+  "source": "https://cloud.vast.ai/",
+  "sourceType": "user-confirmed-billing",
+  "effectiveFrom": "2026-10-12",
+  "physicalGpuCount": 1,
+  "powerIncludedInRate": true
+}

@@ -147,6 +147,26 @@ kip_observability_targets_healthy() {
     ' >/dev/null
 }
 
+kip_observability_wait_for_targets() {
+    local attempt=1 attempts=${KIP_OBSERVABILITY_TARGET_ATTEMPTS:-24}
+    local interval=${KIP_OBSERVABILITY_TARGET_WAIT_SECONDS:-5}
+
+    case "$attempts:$interval" in
+        *[!0-9:]* | 0:* | *:0) return 2 ;;
+    esac
+    while [ "$attempt" -le "$attempts" ]; do
+        if kip_observability_targets_healthy; then
+            return 0
+        fi
+        kip_verbose_output "Scrape target convergence" \
+            "attempt $attempt/$attempts incomplete; retrying in ${interval}s"
+        [ "$attempt" -eq "$attempts" ] && break
+        command sleep "$interval"
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
 kip_observability_query_json() {
     local encoded metric=$1 path
 
@@ -181,6 +201,8 @@ kip_observability_required_metrics_ready() {
     # These are the stable families consumed by the operational dashboards.
     # Query existence rather than positivity: queues, errors, XIDs, throttling,
     # restarts, and idle resource rates are legitimately zero on a healthy node.
+    # DCGM profiling PCIe throughput is optional: some supported NVIDIA cards
+    # expose ordinary device metrics but no DCGM_FI_PROF_PCIE_* series.
     while IFS= read -r metric; do
         [ -n "$metric" ] || continue
         if ! kip_observability_query "$metric"; then
@@ -226,8 +248,6 @@ kip:gpu:memory_used_bytes
 kip:gpu:memory_total_bytes
 kip:gpu:power_watts
 kip:gpu:temperature_celsius
-kip:gpu:pcie_tx_bytes_per_second
-kip:gpu:pcie_rx_bytes_per_second
 kip:gpu:xid_errors
 kip:gpu:clock_throttle
 kip:gpu:sm_clock_mhz
@@ -237,8 +257,6 @@ kip:gpu:runtime_memory_used_bytes
 kip:gpu:runtime_memory_total_bytes
 kip:gpu:runtime_power_watts
 kip:gpu:runtime_temperature_celsius
-kip:gpu:runtime_pcie_tx_bytes_per_second
-kip:gpu:runtime_pcie_rx_bytes_per_second
 kip:gpu:runtime_xid_errors
 kip:gpu:runtime_clock_throttle
 kip:gpu:runtime_sm_clock_mhz

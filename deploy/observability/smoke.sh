@@ -61,7 +61,7 @@ else
     kip_record FAIL "API readiness" "One or more internal APIs failed their health check."
 fi
 
-if kip_observability_targets_healthy; then
+if kip_observability_wait_for_targets; then
     kip_record PASS "Scrape target health" "All active targets are up and the required scrape pools are present."
 else
     kip_record FAIL "Scrape target health" "Prometheus reports a down target or a required scrape pool is absent."

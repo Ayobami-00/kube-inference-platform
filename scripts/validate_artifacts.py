@@ -186,6 +186,8 @@ def validate_dashboards(root: Path) -> int:
 def _validate_schema_scalar(value: Any, schema: Mapping[str, Any], context: str) -> None:
     if "const" in schema and value != schema["const"]:
         raise ArtifactError(f"{context}: expected constant {schema['const']!r}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ArtifactError(f"{context}: value is outside the schema enum")
     value_type = schema.get("type")
     if value_type == "string" and not isinstance(value, str):
         raise ArtifactError(f"{context}: expected a string")
@@ -217,9 +219,11 @@ def _validate_cost_instance(
     profile = _require_mapping(value, context)
     required = set(schema.get("required", []))
     properties = _require_mapping(schema.get("properties"), f"{context}: schema.properties")
-    if set(profile) != required or set(properties) != required:
+    if not required <= set(profile) or not set(profile) <= set(properties):
         raise ArtifactError(f"{context}: fields do not exactly match the cost-profile schema")
     for key, property_schema in properties.items():
+        if key not in profile:
+            continue
         if template and key == "nodeHourlyRateUsd" and profile[key] is None:
             continue
         if template and key in {"provider", "region", "source", "effectiveFrom"}:

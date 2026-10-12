@@ -1320,9 +1320,6 @@ def _resume_state(
     expected_prefix = [cell.identifier for cell in cells[: len(completed)]]
     if completed_ids != expected_prefix:
         raise BenchError("interrupted run completed cells are not an exact suite prefix")
-    if len(completed) >= len(cells):
-        raise BenchError("benchmark run already contains every suite cell")
-
     # A successful timeline entry alone is not enough to skip load. Require
     # the corresponding AIPerf summary to remain present and structurally valid.
     from .pipeline import _find_summary, normalize_aiperf_summary
@@ -1381,7 +1378,15 @@ def execute_run(
             *resume_history,
             {"resumedAt": _utc_now(), "repository": execution_repository},
         ]
-        _preserve_interrupted_cell(destination, run_id, cells[start_index])
+        if start_index < len(cells):
+            _preserve_interrupted_cell(destination, run_id, cells[start_index])
+        # A run may have completed every AIPerf cell but failed during report
+        # normalization (for example while waiting for a cost sample). Retain
+        # its original experiment end rather than extending the billed window
+        # to the later publication retry.
+        run_ended = previous.get("endedAt") if start_index == len(cells) else None
+        if start_index == len(cells) and (not isinstance(run_ended, str) or not run_ended):
+            raise BenchError("completed run is missing its UTC end time")
     else:
         repository = execution_repository
         if destination.exists():
@@ -1394,6 +1399,7 @@ def execute_run(
         start_annotation_id = record_grafana_start_annotation(run_id, run_started, suite, profile)
         timeline = []
         resume_history = []
+        run_ended = None
 
     cell_timeout = suite.data["retention"]["timeoutSeconds"]
     try:
@@ -1427,7 +1433,7 @@ def execute_run(
             "schemaVersion": 1,
             "runId": run_id,
             "startedAt": run_started,
-            "endedAt": _utc_now(),
+            "endedAt": run_ended or _utc_now(),
             "suite": suite.name,
             "suiteSha256": suite.sha256,
             "costProfile": profile.name,

@@ -726,8 +726,6 @@ REQUIRED_OBSERVABILITY_METRICS = (
     "kip:gpu:memory_total_bytes",
     "kip:gpu:power_watts",
     "kip:gpu:temperature_celsius",
-    "kip:gpu:pcie_tx_bytes_per_second",
-    "kip:gpu:pcie_rx_bytes_per_second",
     "kip:gpu:xid_errors",
     "kip:gpu:clock_throttle",
     "kip:gpu:sm_clock_mhz",
@@ -737,8 +735,6 @@ REQUIRED_OBSERVABILITY_METRICS = (
     "kip:gpu:runtime_memory_total_bytes",
     "kip:gpu:runtime_power_watts",
     "kip:gpu:runtime_temperature_celsius",
-    "kip:gpu:runtime_pcie_tx_bytes_per_second",
-    "kip:gpu:runtime_pcie_rx_bytes_per_second",
     "kip:gpu:runtime_xid_errors",
     "kip:gpu:runtime_clock_throttle",
     "kip:gpu:runtime_sm_clock_mhz",
@@ -870,6 +866,31 @@ kip_observability_targets_healthy
         check=False,
     )
     assert completed.returncode == expected
+
+
+def test_scrape_target_discovery_waits_for_initial_convergence() -> None:
+    script = f'''
+source "{ROOT / "deploy" / "lib" / "ui.sh"}"
+source "{OBSERVABILITY / "lib" / "health.sh"}"
+KIP_OBSERVABILITY_TARGET_ATTEMPTS=2
+KIP_OBSERVABILITY_TARGET_WAIT_SECONDS=1
+calls=0
+kip_observability_targets_healthy() {{
+    calls=$((calls + 1))
+    [ "$calls" -eq 2 ]
+}}
+kip_observability_wait_for_targets
+printf '%s' "$calls"
+'''
+    completed = subprocess.run(
+        ["/bin/bash", "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0
+    assert completed.stdout == "2"
 
 
 @pytest.mark.parametrize(

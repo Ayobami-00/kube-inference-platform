@@ -51,14 +51,15 @@ _COMPONENT_VERSION_SOURCES = {
 }
 _ENV_ASSIGNMENT = re.compile(r'^([A-Z][A-Z0-9_]*)="([^"\n]*)"$')
 
-# The report adapter uses stable platform gauges for sampled state. Counters and
-# histograms are deliberately queried from the pinned vLLM metric contract with
+# The report adapter uses stable platform gauges for runtime state, and raw
+# five-second DCGM samples joined to stable Pod identity for GPU state. Counters
+# and histograms are deliberately queried from the pinned vLLM metric contract with
 # an exact per-trial range selector: the continuously useful recording rules use
 # five-minute rates and must not bleed warmup, cooldown, or adjacent cells into
 # a benchmark result. Raw names remain contained in this adapter and never leak
 # into the normalized report schema.
 #
-# Field name -> (series aggregation, stable metric, unit scale). The series
+# Field name -> (series aggregation, stable metric or raw override, unit scale). The series
 # aggregation is evaluated at every scrape; values are then averaged across the
 # exact trial except for state fields whose aggregation is ``max``.
 GAUGE_TELEMETRY_QUERIES = {
@@ -85,6 +86,27 @@ GAUGE_TELEMETRY_QUERIES = {
     "gpuMemoryClockAverageMhz": ("avg", "kip:gpu:runtime_memory_clock_mhz", 1.0),
     "gpuClockThrottleMaxMask": ("max", "kip:gpu:runtime_clock_throttle", 1.0),
     "gpuXidMaxCode": ("max", "kip:gpu:runtime_xid_errors", 1.0),
+}
+OPTIONAL_GPU_TELEMETRY = {
+    "gpuPcieTxAverageBytesPerSecond": "kip:gpu:runtime_pcie_tx_bytes_per_second",
+    "gpuPcieRxAverageBytesPerSecond": "kip:gpu:runtime_pcie_rx_bytes_per_second",
+}
+
+# Benchmark windows can be shorter than the two 15-second recording-rule
+# stages. Query raw five-second DCGM samples and join the reviewed runtime
+# identity directly, so a preceding idle period cannot be misreported as GPU
+# activity inside a short measured cell. The dashboard rules remain unchanged.
+RAW_GPU_GAUGE_EXPRESSIONS = {
+    "gpuUtilizationAveragePct": "DCGM_FI_DEV_GPU_UTIL / 100",
+    "gpuMemoryUsedAverageBytes": "DCGM_FI_DEV_FB_USED * 1024 * 1024",
+    "powerAverageWatts": "DCGM_FI_DEV_POWER_USAGE",
+    "temperatureMaxC": "DCGM_FI_DEV_GPU_TEMP",
+    "gpuPcieTxAverageBytesPerSecond": "DCGM_FI_PROF_PCIE_TX_BYTES",
+    "gpuPcieRxAverageBytesPerSecond": "DCGM_FI_PROF_PCIE_RX_BYTES",
+    "gpuSmClockAverageMhz": "DCGM_FI_DEV_SM_CLOCK",
+    "gpuMemoryClockAverageMhz": "DCGM_FI_DEV_MEM_CLOCK",
+    "gpuClockThrottleMaxMask": "DCGM_FI_DEV_CLOCKS_EVENT_REASONS",
+    "gpuXidMaxCode": "DCGM_FI_DEV_XID_ERRORS or (DCGM_FI_DEV_GPU_UTIL * 0)",
 }
 
 # Field name -> (raw monotonically increasing counter, unit scale).
@@ -202,6 +224,38 @@ def _gpu_quantity(value: Any, description: str) -> int:
     if not isinstance(value, str) or not value.isdecimal():
         raise BenchError(f"{description} is not a whole-GPU quantity")
     return int(value)
+
+
+def _gpu_driver_version_from_nodes(nodes: dict[str, Any]) -> str:
+    """Read the installed driver from GPU Feature Discovery, not the Operator pin.
+
+    Preinstalled-driver hosts may legitimately run a different supported version
+    from the driver that the Operator would install on a fresh host.
+    """
+    items = nodes.get("items")
+    if not isinstance(items, list):
+        raise BenchError("Kubernetes Node inventory is invalid")
+    versions: set[str] = set()
+    for node in items:
+        if not isinstance(node, dict):
+            raise BenchError("Kubernetes Node inventory contains a non-object")
+        try:
+            capacity = _gpu_quantity(
+                node["status"]["capacity"].get("nvidia.com/gpu", "0"),
+                "Node GPU capacity",
+            )
+            labels = node["metadata"]["labels"]
+        except (KeyError, TypeError) as error:
+            raise BenchError("Kubernetes Node is missing GPU driver identity fields") from error
+        if capacity == 0:
+            continue
+        version = labels.get("nvidia.com/cuda.driver-version.full")
+        if not isinstance(version, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", version):
+            raise BenchError("GPU Node is missing a valid installed NVIDIA driver version")
+        versions.add(version)
+    if len(versions) != 1:
+        raise BenchError("benchmark requires one homogeneous installed NVIDIA driver version")
+    return next(iter(versions))
 
 
 def _platform_identity_from_objects(
@@ -333,6 +387,10 @@ def _live_platform_identity(
         f"runtime Deployment {namespace}/{resource_name}",
     )
     nodes = _kubectl_json(["get", "nodes", "-o", "json"], "GPU Node inventory")
+    # The reviewed manifest pins the Operator-managed driver, but a valid
+    # preinstalled-driver node may run another version. Freeze the actual
+    # installed version in the report without changing the receipt schema.
+    component_versions["nvidiaDriver"] = _gpu_driver_version_from_nodes(nodes)
     return _platform_identity_from_objects(
         suite, cost_profile, component_versions, deployment, nodes
     )
@@ -638,7 +696,7 @@ def collect_telemetry(
     model_name: str,
     runtime: str,
     model_profile: str,
-) -> dict[str, float]:
+) -> dict[str, float | None]:
     """Collect state samples and exact-window counter/histogram statistics."""
     query_start = _timestamp(_parse_timestamp(start) - timedelta(seconds=context_seconds))
     query_end = _timestamp(_parse_timestamp(end) + timedelta(seconds=context_seconds))
@@ -671,13 +729,28 @@ def collect_telemetry(
         )
     )
     for field, (aggregation, metric, scale) in GAUGE_TELEMETRY_QUERIES.items():
-        expression = f"{aggregation}({metric}{{{workload_selector}}})"
-        values = _series_values(
-            prometheus.query_range(expression, start=query_start, end=query_end, step="5s"),
-            expression,
-            window_start=start,
-            window_end=end,
-        )
+        if field in RAW_GPU_GAUGE_EXPRESSIONS:
+            raw = RAW_GPU_GAUGE_EXPRESSIONS[field]
+            expression = (
+                f"{aggregation}((({raw}) * on (cluster,namespace,node,pod) "
+                "group_left (runtime,model_profile,model_name) "
+                f"kip:runtime:pod_identity{{{workload_selector}}}))"
+            )
+        else:
+            expression = f"{aggregation}({metric}{{{workload_selector}}})"
+        series = prometheus.query_range(expression, start=query_start, end=query_end, step="5s")
+        try:
+            values = _series_values(
+                series,
+                expression,
+                window_start=start,
+                window_end=end,
+            )
+        except BenchError as error:
+            if field not in OPTIONAL_GPU_TELEMETRY or "no usable samples" not in str(error):
+                raise
+            telemetry[field] = None
+            continue
         reduced = max(values) if aggregation == "max" else sum(values) / len(values)
         telemetry[field] = reduced * scale
 
@@ -752,17 +825,44 @@ def collect_trial_cost(
     end: str,
     energy_kwh: float,
     model_name: str,
+    node_hourly_rate_usd: float,
 ) -> dict[str, float]:
-    """Collect allocation and usage inference costs for one measured trial."""
+    """Audit exact elapsed-node cost and attribute it with OpenCost shares.
+
+    OpenCost's minute-resolution short-window totals can materially undercount
+    a sub-minute trial. The reviewed node rate prices exact elapsed time;
+    OpenCost determines model, active-usage, and token-phase proportions.
+    """
+    if node_hourly_rate_usd <= 0:
+        raise BenchError("the reviewed whole-node hourly rate must be positive")
+    elapsed_seconds = (_parse_timestamp(end) - _parse_timestamp(start)).total_seconds()
+    if elapsed_seconds <= 0:
+        raise BenchError("the cost trial window must have positive duration")
+    node_allocation = opencost.allocation(start=start, end=end, share_idle=True)
     allocated = opencost.inference_cost(
         start=start, end=end, cost_basis="allocation", model_name=model_name
     )
     usage = opencost.inference_cost(start=start, end=end, cost_basis="usage", model_name=model_name)
+    node_cost = _sum_cost(node_allocation)
+    model_cost = _sum_cost(allocated)
+    usage_cost = _sum_cost(usage)
+    input_cost = _sum_cost(allocated, "inputCost")
+    output_cost = _sum_cost(allocated, "outputCost")
+    if node_cost <= 0 or model_cost <= 0 or usage_cost <= 0:
+        raise BenchError("OpenCost trial allocation or inference usage is not positive")
+    if model_cost > node_cost * 1.05:
+        raise BenchError("OpenCost model allocation exceeds whole-node allocation")
+    phase_cost = input_cost + output_cost
+    if input_cost <= 0 or output_cost <= 0 or abs(phase_cost - model_cost) > model_cost * 0.05:
+        raise BenchError("OpenCost trial token-phase costs do not reconcile with model allocation")
+    audited_model_cost = (
+        node_hourly_rate_usd * elapsed_seconds / 3600 * min(model_cost / node_cost, 1.0)
+    )
     return {
-        "allocatedUsd": _sum_cost(allocated),
-        "usageUsd": _sum_cost(usage),
-        "inputUsd": _sum_cost(allocated, "inputCost"),
-        "outputUsd": _sum_cost(allocated, "outputCost"),
+        "allocatedUsd": audited_model_cost,
+        "usageUsd": audited_model_cost * usage_cost / model_cost,
+        "inputUsd": audited_model_cost * input_cost / phase_cost,
+        "outputUsd": audited_model_cost * output_cost / phase_cost,
         "energyKwh": energy_kwh,
     }
 
@@ -1133,6 +1233,7 @@ def normalize_run(
             end=trial_end,
             energy_kwh=energy_kwh,
             model_name=suite.data["target"]["servedModel"],
+            node_hourly_rate_usd=profile.node_hourly_rate,
         )
         trials.append(
             {
@@ -1169,6 +1270,18 @@ def normalize_run(
     warnings = (
         [f"AIPerf recorded {failed_requests} failed measured requests"] if failed_requests else []
     )
+    missing_optional = sorted(
+        {
+            metric
+            for field, metric in OPTIONAL_GPU_TELEMETRY.items()
+            if any(trial["telemetry"][field] is None for trial in trials)
+        }
+    )
+    if missing_optional:
+        warnings.append(
+            "GPU PCIe throughput profiling was not exposed by DCGM for one or more "
+            "trial windows; PCIe report values are N/A, not zero."
+        )
     resume_history = receipt.get("resumeHistory", [])
     if resume_history:
         warnings.append(
@@ -1221,7 +1334,7 @@ def normalize_run(
         "dataQuality": {
             "status": "warning" if warnings else "complete",
             "warnings": warnings,
-            "missingSeries": [],
+            "missingSeries": missing_optional,
         },
     }
 

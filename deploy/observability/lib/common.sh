@@ -377,7 +377,8 @@ kip_observability_validate_cost_profile_schema() {
     local profile=$1
 
     kip_exec jq -e '
-        (keys | sort) == ["currency", "effectiveFrom", "machineType", "name", "nodeHourlyRateUsd", "physicalGpuCount", "powerIncludedInRate", "provider", "region", "schemaVersion", "source"]
+        ((keys - ["sourceType"]) | sort) == ["currency", "effectiveFrom", "machineType", "name", "nodeHourlyRateUsd", "physicalGpuCount", "powerIncludedInRate", "provider", "region", "schemaVersion", "source"]
+        and (.sourceType == null or .sourceType == "public-listing" or .sourceType == "user-confirmed-billing")
         and .schemaVersion == 1
         and (.name | type == "string" and length >= 1 and length <= 63 and test("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"))
         and .currency == "USD"

@@ -39,6 +39,9 @@
       "maxLength": 512,
       "pattern": "^https://[^/@?#\\s]+(/[^?#\\s]*)?$"
     },
+    "sourceType": {
+      "enum": ["public-listing", "user-confirmed-billing"]
+    },
     "effectiveFrom": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",

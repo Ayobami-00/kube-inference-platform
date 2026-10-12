@@ -128,6 +128,10 @@ _TELEMETRY_KEYS = {
     "gpuClockThrottleMaxMask",
     "gpuXidMaxCode",
 }
+_OPTIONAL_TELEMETRY_KEYS = {
+    "gpuPcieTxAverageBytesPerSecond",
+    "gpuPcieRxAverageBytesPerSecond",
+}
 _TRIAL_COST_KEYS = {"allocatedUsd", "usageUsd", "inputUsd", "outputUsd", "energyKwh"}
 _OPENCOST_KEYS = {
     "windowStart",
@@ -332,6 +336,7 @@ def validate_normalized_input(
     if not isinstance(trials, list) or not trials:
         raise ValidationError("trials must be a non-empty array")
     seen: set[tuple[int, int]] = set()
+    missing_optional_telemetry = False
     for index, raw_trial in enumerate(trials):
         trial = _mapping(raw_trial, f"trials[{index}]")
         _exact_keys(trial, _TRIAL_KEYS, f"trials[{index}]")
@@ -368,6 +373,9 @@ def validate_normalized_input(
         telemetry = _mapping(trial["telemetry"], "trial.telemetry")
         _exact_keys(telemetry, _TELEMETRY_KEYS, "trial.telemetry")
         for key, value in telemetry.items():
+            if key in _OPTIONAL_TELEMETRY_KEYS and value is None:
+                missing_optional_telemetry = True
+                continue
             _number(value, f"trial.telemetry.{key}")
         cost = _mapping(trial["cost"], "trial.cost")
         _exact_keys(cost, _TRIAL_COST_KEYS, "trial.cost")
@@ -437,6 +445,10 @@ def validate_normalized_input(
             isinstance(item, str) for item in quality[key]
         ):
             raise ValidationError(f"dataQuality.{key} must be an array of strings")
+    if missing_optional_telemetry and (
+        quality["status"] != "warning" or not quality["missingSeries"]
+    ):
+        raise ValidationError("unavailable PCIe profiling must be disclosed as a warning")
     return data
 
 
@@ -553,12 +565,13 @@ def aggregate_trials(data: dict[str, Any]) -> list[dict[str, Any]]:
                 / (inputs + outputs)
             ),
         }
-        row.update(
-            {
-                name: _mean([float(item["telemetry"][name]) for item in trials])
-                for name in average_telemetry
-            }
-        )
+        for name in average_telemetry:
+            available = [
+                float(item["telemetry"][name])
+                for item in trials
+                if item["telemetry"][name] is not None
+            ]
+            row[name] = _mean(available) if available else None
         row.update(
             {
                 name: max(float(item["telemetry"][name]) for item in trials)
@@ -566,8 +579,16 @@ def aggregate_trials(data: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
         row["gpuMemoryUsedAverageGiB"] = row["gpuMemoryUsedAverageBytes"] / (1024**3)
-        row["gpuPcieTxAverageMiBPerSecond"] = row["gpuPcieTxAverageBytesPerSecond"] / (1024**2)
-        row["gpuPcieRxAverageMiBPerSecond"] = row["gpuPcieRxAverageBytesPerSecond"] / (1024**2)
+        row["gpuPcieTxAverageMiBPerSecond"] = (
+            row["gpuPcieTxAverageBytesPerSecond"] / (1024**2)
+            if row["gpuPcieTxAverageBytesPerSecond"] is not None
+            else None
+        )
+        row["gpuPcieRxAverageMiBPerSecond"] = (
+            row["gpuPcieRxAverageBytesPerSecond"] / (1024**2)
+            if row["gpuPcieRxAverageBytesPerSecond"] is not None
+            else None
+        )
         for name, values in latency_values.items():
             row[name] = _mean(values)
             row[f"{name}Ci95"] = _ci95(values)
@@ -577,6 +598,8 @@ def aggregate_trials(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _format_number(value: Any, digits: int = 3) -> str:
+    if value is None:
+        return "N/A"
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
@@ -596,7 +619,7 @@ def _svg_chart(
     plot_width = width - left - right
     plot_height = height - top - bottom
     x_values = [float(row["concurrency"]) for row in rows]
-    y_values = [float(row[key]) for key, _, _ in series for row in rows]
+    y_values = [float(row[key]) for key, _, _ in series for row in rows if row[key] is not None]
     x_min, x_max = min(x_values), max(x_values)
     y_min, y_max = 0.0, max(y_values) if y_values else 1.0
     if y_max == 0:
@@ -636,11 +659,16 @@ def _svg_chart(
             f'fill="#aab7c4" font-family="system-ui" font-size="11">{row["concurrency"]}</text>'
         )
     for series_index, (key, label, color) in enumerate(series):
+        available = [row for row in rows if row[key] is not None]
         points = " ".join(
-            f"{x_pos(float(row['concurrency'])):.2f},{y_pos(float(row[key])):.2f}" for row in rows
+            f"{x_pos(float(row['concurrency'])):.2f},{y_pos(float(row[key])):.2f}"
+            for row in available
         )
-        parts.append(f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="2"/>')
-        for row in rows:
+        if points:
+            parts.append(
+                f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="2"/>'
+            )
+        for row in available:
             parts.append(
                 f'<circle cx="{x_pos(float(row["concurrency"])):.2f}" '
                 f'cy="{y_pos(float(row[key])):.2f}" r="3" fill="{color}"/>'
@@ -652,6 +680,12 @@ def _svg_chart(
         parts.append(
             f'<text x="{legend_x + 18}" y="{height - 17}" fill="#d8e0e8" '
             f'font-family="system-ui" font-size="11">{html.escape(label)}</text>'
+        )
+    if not y_values:
+        parts.append(
+            f'<text x="{left + plot_width / 2:.2f}" y="{top + plot_height / 2:.2f}" '
+            'text-anchor="middle" fill="#aab7c4" font-family="system-ui" '
+            'font-size="14">N/A: telemetry unavailable on this GPU</text>'
         )
     parts.extend(
         [
@@ -909,8 +943,8 @@ def _render_html(data: dict[str, Any], summary: dict[str, Any]) -> str:
   <section><h2>Cost provenance</h2>
     <p>{html.escape(profile["provider"])} · {html.escape(profile["machineType"])} · {html.escape(profile["region"])}</p>
     <p>Whole-node USD/hour: <strong>{profile["nodeHourlyRateUsd"]:.6f}</strong>; effective {html.escape(profile["effectiveFrom"])}; power included.</p>
-    <p><a href="{html.escape(profile["source"], quote=True)}">Published rate source</a> · profile SHA-256 <code>{html.escape(profile["sha256"])}</code></p>
-    <p class="muted">Costs are transparent rate-based estimates, not a provider invoice. Allocated cost includes idle node time; usage cost is an efficiency view.</p>
+    <p><a href="{html.escape(profile["source"], quote=True)}">{("User-confirmed billing portal" if profile.get("sourceType") == "user-confirmed-billing" else "Published rate source")}</a> · profile SHA-256 <code>{html.escape(profile["sha256"])}</code></p>
+    <p class="muted">Costs are transparent rate-based estimates, not a provider invoice. Allocated cost includes idle node time; usage cost is an efficiency view. Per-trial charges use the reviewed node hourly rate times exact elapsed time, attributed by OpenCost's model share; usage and input/output splits retain OpenCost's measured proportions. This avoids treating coarse short-window OpenCost totals as exact elapsed billing.</p>
   </section>
   <section><h2>Reproducibility</h2>
     <p>Git commit <code>{html.escape(run["gitRevision"])}</code> · tree state <strong>{html.escape(run["gitTreeState"])}</strong> · workspace SHA-256 <code>{html.escape(run["gitWorkspaceSha256"])}</code></p>
@@ -1004,6 +1038,7 @@ def build_summary(data: dict[str, Any], profile: CostProfile) -> dict[str, Any]:
             "effectiveFrom": profile.data["effectiveFrom"],
         },
         "cost": {
+            "trialAttributionMethod": "exact-node-time-times-opencost-model-share",
             "experimentAllocatedUsd": actual,
             "experimentUsageUsd": float(data["opencost"]["usageUsd"]),
             "experimentInputUsd": float(data["opencost"]["inputUsd"]),

@@ -10,10 +10,9 @@ optimisation.
 > The repository currently contains the v0.1 foundation, portable host preparation,
 > single-node Kubernetes bootstrap, NVIDIA GPU stack tooling, and a pluggable runtime layer
 > with a vLLM adapter. It also contains the Prometheus/Grafana/DCGM/OpenCost observability
-> layer and the AIPerf-based benchmark and report workflow. The host-to-CUDA path has passed
-> on target NVIDIA A10 hardware. Runtime, observability, cost, and benchmark tooling are
-> covered by deterministic local tests but still require their complete target-hardware
-> acceptance checkpoints.
+> layer and the AIPerf-based benchmark and report workflow. The host-to-inference path
+> and live observability have passed on target NVIDIA A10 hardware. The complete baseline
+> benchmark report and cost reconciliation remain pending.
 
 ## v0.1 objective
 
@@ -406,7 +405,7 @@ Install the internal observability stack after the runtime checkpoint:
 
 ```bash
 make observability-install
-make observability-install COST_PROFILE=a10-node
+make observability-install COST_PROFILE=<reviewed-profile>
 make observability-install VERBOSE=1 COST_PROFILE=a10-node
 make observability-check
 make observability-smoke
@@ -421,6 +420,9 @@ and metric contract. A checksum-pinned collector ConfigMap enables the GPU utili
 memory, power, temperature, clock, PCIe, throttle-reason, and XID counters used by the stable
 rules. Validation checks the effective ClusterPolicy and generated exporter DaemonSet—not only
 Helm's stored values—and a missing ConfigMap is safely restored before GPU health is evaluated.
+DCGM PCIe throughput profiling is hardware-dependent: when the GPU does not expose those
+series, the PCIe panel has no data and benchmark reports show `N/A` with a data-quality warning.
+The required utilization, memory, power, temperature, and inference metrics still gate success.
 Unmanaged content or live image/environment drift is refused. Services remain `ClusterIP`;
 the installer creates no ingress, NodePort,
 or external load balancer. Prometheus
@@ -537,6 +539,15 @@ path is accepted. Ephemeral CPU-only Jobs run the digest-pinned `aiperf profile`
 warmup and for each trial/cell, request no GPU, and write only into that results volume.
 Ownership checks prevent the executor from adopting or replacing unrelated Jobs or storage.
 
+For a short end-to-end checkpoint, the reviewed `smoke` suite runs an eight-request warmup
+followed by 300 measured streaming requests at each concurrency of `1` and `4`. This keeps
+both measured cells longer than OpenCost's minute-scale allocation window on the validated
+node and spans multiple five-second Prometheus scrapes:
+
+```bash
+make benchmark SUITE=smoke COST_PROFILE=<reviewed-profile>
+```
+
 Run the reviewed baseline only after cluster, GPU, runtime, observability, and cost checks pass:
 
 ```bash
@@ -580,7 +591,9 @@ charts/*.svg
 ```
 
 The report combines AIPerf latency and throughput with model-scoped Prometheus runtime/GPU
-telemetry and OpenCost allocation. Sampled gauges are clipped to each trial's exact UTC
+telemetry and OpenCost allocation. Runtime gauges use stable rules; short-trial GPU gauges use
+raw five-second DCGM samples joined to the runtime Pod identity, avoiding the lag of two
+15-second recording-rule stages. Samples are clipped to each trial's exact UTC
 boundaries; token rates and server latency percentiles are recomputed from raw counter and
 histogram increases over that trial, so five-minute dashboard windows cannot mix warmup,
 cooldown, or neighboring concurrency cells into the result. It keeps AIPerf's client-observed
@@ -588,7 +601,7 @@ TTFT, inter-token latency (ITL), and end-to-end latency distinct from vLLM's ser
 TTFT, time per output token (TPOT), and end-to-end latency. It also includes request/output-token
 throughput, confidence intervals, trial variability,
 running/queued requests, KV-cache state, prompt/generated/cached token rates, server-side
-latency, GPU utilization, memory, power, temperature, PCIe traffic, clocks, throttle reasons,
+latency, GPU utilization, memory, power, temperature, PCIe traffic when available, clocks, throttle reasons,
 XID state, total experiment cost, measured-window cost, per-trial cost, allocated and usage
 USD/request,
 input/output/blended USD per million tokens, requests/USD, tokens/USD, and energy efficiency.
@@ -602,7 +615,10 @@ client and is not presented as server TPOT. Summary-only AIPerf artifacts do not
 therefore cannot prove terminal `[DONE]` framing. `make runtime-smoke` remains the explicit
 incremental-SSE and `[DONE]` protocol checkpoint.
 
-The report audits the whole experiment against `node hourly rate × elapsed time` and requires
+Per-trial allocated cost uses `node hourly rate × exact trial duration × OpenCost model share`;
+OpenCost's usage and input/output proportions split that amount. This keeps short benchmark
+cells from inheriting OpenCost's coarse sub-minute totals while preserving its workload
+attribution. The report audits the whole experiment against `node hourly rate × elapsed time` and requires
 OpenCost allocation to agree within the greater of 5% or one minute of node cost. Missing
 cost/token attribution, stale pricing, a stale post-run scrape, or a larger mismatch invalidates
 publication. Publication waits up to three minutes for Prometheus and OpenCost to cover the
@@ -694,12 +710,13 @@ make benchmark-install
 - [x] Validate the NVIDIA GPU stack and CUDA smoke Pod on target hardware.
 - [x] Provision the target host and validate the host, cluster, and GPU slices.
 - [x] Implement the pluggable runtime layer and vLLM inference-checkpoint tooling.
-- [ ] Validate vLLM and streaming OpenAI-compatible inference on target hardware.
+- [x] Validate vLLM and streaming OpenAI-compatible inference on target hardware.
 - [x] Implement Prometheus, Grafana, DCGM, and stable inference-metric tooling.
-- [ ] Validate observability collection and dashboards on target hardware.
+- [x] Validate observability collection and dashboards on target hardware.
 - [x] Implement OpenCost integration and reviewed whole-node cost profiles.
-- [ ] Configure and reconcile a real target-node price.
+- [x] Confirm the Vast RTX 4090 node price and reconcile a priced AIPerf smoke report.
 - [x] Implement the AIPerf benchmark orchestration and static report tooling.
+- [x] Run and publish the short, two-concurrency benchmark on target hardware.
 - [ ] Run and document the five-trial baseline concurrency experiment.
 
 Deployment assets are added in that order. Each command documented here must be verified on

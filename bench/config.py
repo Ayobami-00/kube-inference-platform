@@ -65,6 +65,7 @@ _COST_KEYS = {
     "physicalGpuCount",
     "powerIncludedInRate",
 }
+_COST_OPTIONAL_KEYS = {"sourceType"}
 _RUNTIME_MODEL_KEYS = {"id", "revision", "servedName", "huggingFaceSecretName"}
 
 
@@ -282,7 +283,25 @@ def load_cost_profile(name: str, *, root: Path | None = None) -> CostProfile:
     if path.parent != base:
         raise ValidationError("cost profile path escapes the committed profile directory")
     data = _load_json(path, "cost profile")
-    _require_exact_keys(data, _COST_KEYS, "cost profile")
+    missing = sorted(_COST_KEYS - data.keys())
+    unknown = sorted(data.keys() - _COST_KEYS - _COST_OPTIONAL_KEYS)
+    if missing or unknown:
+        raise ValidationError(
+            "cost profile has invalid fields: "
+            + "; ".join(
+                part
+                for part in (
+                    f"missing {', '.join(missing)}" if missing else "",
+                    f"unknown {', '.join(unknown)}" if unknown else "",
+                )
+                if part
+            )
+        )
+    if data.get("sourceType", "public-listing") not in {
+        "public-listing",
+        "user-confirmed-billing",
+    }:
+        raise ValidationError("cost profile sourceType is invalid")
     if data["schemaVersion"] != 1 or data["name"] != name:
         raise ValidationError("cost profile schemaVersion must be 1 and name must match filename")
     if data["currency"] != "USD":

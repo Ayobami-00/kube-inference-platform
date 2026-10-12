@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "name": "smoke",
+  "description": "Short in-cluster AIPerf inference and reporting checkpoint",
+  "target": {
+    "runtime": "vllm",
+    "modelProfile": "qwen2.5-7b-instruct",
+    "servedModel": "qwen2.5-7b-instruct",
+    "endpoint": "http://vllm-qwen25-7b.kip-runtime.svc.cluster.local:8000/v1"
+  },
+  "workload": {
+    "protocol": "openai-chat",
+    "streaming": true,
+    "inputTokens": 256,
+    "outputTokens": 64,
+    "temperature": 0,
+    "seed": 42,
+    "ignoreEos": true
+  },
+  "warmup": {
+    "requests": 8,
+    "concurrency": 1,
+    "excludeFromMetrics": true
+  },
+  "sweep": {
+    "concurrency": [1, 4],
+    "requestsPerCell": 300,
+    "trialsPerCell": 1,
+    "cooldownSeconds": 0,
+    "confidenceLevel": 0.95,
+    "iterationOrder": "independent"
+  },
+  "telemetry": {
+    "sampleIntervalMilliseconds": 333,
+    "prometheusContextSeconds": 120
+  },
+  "retention": {
+    "resultsDays": 30,
+    "timeoutSeconds": 3600
+  }
+}

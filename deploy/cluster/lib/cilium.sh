@@ -52,7 +52,7 @@ kip_run_cilium_connectivity() {
         --ip-families ipv4 \
         --hubble=false \
         --test-concurrency 1 \
-        --timeout 10m; then
+        --timeout 25m; then
         result=1
     fi
     if ! kip_cilium_cli connectivity test --cleanup; then

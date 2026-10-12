@@ -1,12 +1,102 @@
-# v0.1 Architecture
+# Kube Inference Platform architecture
 
-Status: **Host, single-node cluster, and GPU path validated on target hardware; runtime,
-observability, cost, and benchmark tooling implemented with full target acceptance pending**
+v0.1 status: **Host-to-inference validated on an NVIDIA A10 and again on a Vast RTX 4090;
+live observability and a priced, reconciled short benchmark report are validated on the RTX 4090.
+The five-trial baseline experiment remains pending.**
 
 The v0.1 milestone proves a measurable and reproducible serving path on one SSH-accessible
 bare-metal NVIDIA GPU server. The platform composes Kubernetes, NVIDIA's Kubernetes
 integration, vLLM, Prometheus/Grafana, OpenCost, and AIPerf rather than replacing any of their
 schedulers or accounting models.
+
+## Eventual platform (planned)
+
+The long-term goal is a portable, Kubernetes-native inference platform that turns one or more
+supported, SSH-accessible bare-metal GPU servers into a model-serving cluster. A user should be
+able to declare a model, runtime, GPU and parallelism needs, replica range, and latency target;
+the platform should handle deployment, placement, request routing, scaling, health, measurement,
+and cost. The same interface should work from one GPU through multi-node distributed replicas,
+without tying the control plane to a particular server provider.
+
+```mermaid
+flowchart TB
+    subgraph Interfaces[User and workload interfaces]
+        Spec["inferctl / declarative API / ModelDeployment CRD"]
+        Client[OpenAI-compatible API clients]
+        Suite[Reviewed AIPerf benchmark suites]
+    end
+
+    subgraph Control[Planned Go control plane]
+        Controller[Model and runtime controllers]
+        Planner[Topology-aware placement and capacity]
+        Scaler[SLO-aware autoscaler]
+        Cache[Model cache manager]
+    end
+
+    subgraph Serving[Inference request path]
+        Gateway[Gateway: authentication, quotas, admission, streaming]
+        Router[Endpoint routing: load, queue, and KV affinity]
+        Replicas[vLLM or SGLang replicas: combined or prefill/decode]
+    end
+
+    subgraph Foundation[Portable Kubernetes and GPU foundation]
+        Nodes[One or more bare-metal GPU nodes]
+        Bootstrap[Kubernetes, Cilium, GPU and optional Network Operators]
+        Topology[GPU, NVLink, NUMA, NIC, and RDMA topology]
+        GPUs[GPU capacity across nodes]
+    end
+
+    subgraph Evidence[Observability, cost, and experiments]
+        Telemetry[Runtime, Kubernetes, and DCGM telemetry]
+        Metrics[Prometheus and future OpenTelemetry]
+        Dashboards[Grafana dashboards and alerts]
+        Costs[OpenCost allocation and inference cost]
+        Reports[Sanitized benchmark reports]
+    end
+
+    Spec --> Controller
+    Controller --> Planner
+    Controller --> Scaler
+    Controller --> Cache
+    Planner --> Replicas
+    Scaler --> Replicas
+    Cache --> Replicas
+
+    Client --> Gateway
+    Suite --> Gateway
+    Gateway --> Router --> Replicas --> GPUs
+    Nodes --> Bootstrap --> GPUs
+    Topology --> Planner
+    Nodes --> Topology
+
+    Replicas --> Telemetry
+    GPUs --> Telemetry
+    Telemetry --> Metrics
+    Metrics --> Dashboards
+    Metrics --> Costs
+    Suite --> Reports
+    Metrics --> Reports
+    Costs --> Reports
+    Reports -.->|measured evidence for future policies| Planner
+```
+
+The control plane decides *what* should run and *where*: it translates `ModelDeployment`
+resources into Kubernetes workloads, places GPU groups according to topology, and scales
+replicas against inference SLOs. The gateway decides *whether* to admit a request and *which
+replica* should receive it while forwarding streaming responses. The selected runtime retains
+control of batching and token scheduling *inside* its replica.
+
+Horizontal replicas and distributed execution solve different problems. The platform should
+route among independent replicas for capacity and availability, while supporting tensor,
+pipeline, and eventually disaggregated prefill/decode work within a replica when one model
+needs multiple GPUs or nodes. Kubernetes-native workload primitives should manage distributed
+replica lifecycles; the platform supplies topology and runtime configuration.
+
+The measurement loop is a core platform feature: AIPerf exercises the same serving path as
+clients, while Prometheus, DCGM, OpenCost, and future tracing provide the latency, throughput,
+GPU, energy, and cost evidence used to compare routing, placement, and scaling policies. The
+diagram is a destination, not a claim that its Go control plane, gateway, autoscaler, SGLang
+adapter, or multi-node execution exists in v0.1.
 
 ## Bootstrap dependency chain
 
@@ -107,15 +197,17 @@ adapter layer calculates request/error and token rates; server TTFT, TPOT, end-t
 prefill, and decode percentiles; running/waiting requests; KV/prefix-cache state;
 preemptions; readiness; GPU utilization/memory/power/thermal/clock/PCIe/XID state; and node
 health. Dashboard variables filter these dimensions instead of hardcoding the v0.1 model or
-Deployment.
+Deployment. DCGM PCIe profiling is optional on GPUs that do not expose its profiling counters;
+reports disclose missing series and render `N/A`, never a synthetic zero.
 
 Collection has three deliberate resolutions: 5-second Prometheus samples for vLLM/DCGM,
 15–30-second platform samples, and 333-millisecond AIPerf-local telemetry during an active
 experiment. The fastest stream remains benchmark-local so long-term Prometheus storage does
 not become a raw trace system.
 
-Benchmark publication clips model-scoped stable gauge samples to each exact trial window for
-queue, KV-cache, and runtime-attributed GPU utilization, memory, power, temperature, PCIe,
+Benchmark publication clips model-scoped stable runtime gauges and raw five-second DCGM GPU
+gauges joined to the runtime Pod identity to each exact trial window for
+queue, KV-cache, and GPU utilization, memory, power, temperature, PCIe,
 clocks, throttle reasons, and XID state. It computes prompt/generated/cached token rates and
 server TTFT/TPOT/end-to-end percentiles from the pinned vLLM counter and histogram increases
 over that trial alone. The five-minute recording rules remain useful for dashboards but cannot

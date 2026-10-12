@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KIP benchmark smoke-20261012-185555</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1018; --panel:#141c28; --text:#eef3f8; --muted:#aab7c4; --accent:#5ed6c1; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
+    main { max-width:1200px; margin:auto; padding:32px 24px 64px; }
+    h1,h2 { line-height:1.2; } .muted { color:var(--muted); }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+    .card,section { background:var(--panel); border:1px solid #263244; border-radius:10px; padding:16px; margin:14px 0; }
+    .value { color:var(--accent); font-size:1.5rem; font-weight:650; }
+    table { width:100%; border-collapse:collapse; font-size:13px; } th,td { padding:8px; border-bottom:1px solid #2b384a; text-align:right; } th:first-child,td:first-child { text-align:left; }
+    img { max-width:100%; height:auto; } a { color:#77c8ff; } code { color:#d6b7ff; } pre { overflow:auto; padding:12px; background:#0b1018; border-radius:6px; }
+  </style>
+</head>
+<body><main>
+  <h1>Kube Inference Platform benchmark</h1>
+  <p class="muted">Run <code>smoke-20261012-185555</code> · 2026-10-12T18:56:47.540787Z to 2026-10-12T19:04:22.779008Z</p>
+  <div class="cards">
+    <div class="card"><div class="muted">Model</div><div class="value">qwen2.5-7b-instruct</div></div>
+    <div class="card"><div class="muted">Experiment cost</div><div class="value">$0.1200</div></div>
+    <div class="card"><div class="muted">Measured cost</div><div class="value">$0.1079</div></div>
+    <div class="card"><div class="muted">Node rate</div><div class="value">$0.9980/h</div></div>
+    <div class="card"><div class="muted">Requests / USD</div><div class="value">5558.2</div></div>
+    <div class="card"><div class="muted">Tokens / USD</div><div class="value">1778594</div></div>
+    <div class="card"><div class="muted">Energy / request</div><div class="value">0.0631 Wh</div></div>
+    <div class="card"><div class="muted">Errors</div><div class="value">0</div></div>
+  </div>
+  <section><h2>Streaming evidence boundary</h2>
+    <p>AIPerf ran in streaming mode, the non-cancelled summary contained positive client-observed TTFT and inter-token latency (ITL) percentiles, and request success/error accounting matched the suite total. ITL is not labeled as server TPOT; server TPOT is reported separately from vLLM's time-per-output-token histogram.</p>
+    <p class="muted">AIPerf summary-only artifacts do not retain SSE frames, so this evidence cannot prove terminal <code>[DONE]</code> framing. The runtime smoke test is the explicit incremental-SSE and <code>[DONE]</code> protocol checkpoint.</p>
+  </section>
+  <section><h2>Suite and workload manifest</h2>
+    <p>Committed suite <strong>smoke</strong> · SHA-256 <code>7906c5def87e195f54af74324b3ba9221f97d1fc1c061465c20a01bcfecfca50</code></p>
+    <pre><code>{
+  &quot;description&quot;: &quot;Short in-cluster AIPerf inference and reporting checkpoint&quot;,
+  &quot;name&quot;: &quot;smoke&quot;,
+  &quot;retention&quot;: {
+    &quot;resultsDays&quot;: 30,
+    &quot;timeoutSeconds&quot;: 3600
+  },
+  &quot;schemaVersion&quot;: 1,
+  &quot;sweep&quot;: {
+    &quot;concurrency&quot;: [
+      1,
+      4
+    ],
+    &quot;confidenceLevel&quot;: 0.95,
+    &quot;cooldownSeconds&quot;: 0,
+    &quot;iterationOrder&quot;: &quot;independent&quot;,
+    &quot;requestsPerCell&quot;: 300,
+    &quot;trialsPerCell&quot;: 1
+  },
+  &quot;target&quot;: {
+    &quot;endpoint&quot;: &quot;http://vllm-qwen25-7b.kip-runtime.svc.cluster.local:8000/v1&quot;,
+    &quot;modelProfile&quot;: &quot;qwen2.5-7b-instruct&quot;,
+    &quot;runtime&quot;: &quot;vllm&quot;,
+    &quot;servedModel&quot;: &quot;qwen2.5-7b-instruct&quot;
+  },
+  &quot;telemetry&quot;: {
+    &quot;prometheusContextSeconds&quot;: 120,
+    &quot;sampleIntervalMilliseconds&quot;: 333
+  },
+  &quot;warmup&quot;: {
+    &quot;concurrency&quot;: 1,
+    &quot;excludeFromMetrics&quot;: true,
+    &quot;requests&quot;: 8
+  },
+  &quot;workload&quot;: {
+    &quot;ignoreEos&quot;: true,
+    &quot;inputTokens&quot;: 256,
+    &quot;outputTokens&quot;: 64,
+    &quot;protocol&quot;: &quot;openai-chat&quot;,
+    &quot;seed&quot;: 42,
+    &quot;streaming&quot;: true,
+    &quot;temperature&quot;: 0
+  }
+}</code></pre>
+  </section>
+  <section><h2>Performance and cost</h2><div style="overflow:auto"><table><thead><tr><th>Concurrency</th><th>TTFT P50 ms</th><th>TTFT P95 ms</th><th>TTFT P99 ms</th><th>AIPerf ITL P50 ms</th><th>AIPerf ITL P95 ms</th><th>AIPerf ITL P99 ms</th><th>E2E P50 ms</th><th>E2E P95 ms</th><th>E2E P99 ms</th><th>Req/s</th><th>Output tok/s</th><th>GPU util %</th><th>GPU memory GiB</th><th>Power W</th><th>Temperature max C</th><th>KV-cache %</th><th>Running max</th><th>Waiting max</th><th>Server prompt tok/s</th><th>Server generated tok/s</th><th>Server cached tok/s</th><th>Server TTFT P95 ms</th><th>Server TPOT P95 ms</th><th>Server E2E P95 ms</th><th>PCIe TX MiB/s</th><th>PCIe RX MiB/s</th><th>SM clock MHz</th><th>Memory clock MHz</th><th>Throttle mask max</th><th>XID max code</th><th>Allocated USD</th><th>Usage USD</th><th>Allocated USD/request</th><th>Usage USD/request</th><th>Input USD/1M</th><th>Output USD/1M</th><th>USD/1M tokens</th><th>Requests/USD</th><th>Tokens/USD</th><th>Wh/request</th><th>kWh/1M tokens</th><th>Frontier</th></tr></thead><tbody><tr><td>1</td><td>43.578</td><td>50.996</td><td>60.841</td><td>15.430</td><td>15.462</td><td>15.682</td><td>1015.777</td><td>1024.362</td><td>1045.703</td><td>0.980</td><td>62.742</td><td>98.295</td><td>41.984</td><td>356.728</td><td>72.000</td><td>0.060</td><td>1.000</td><td>0.000</td><td>279.300</td><td>62.750</td><td>0.000</td><td>59.083</td><td>24.250</td><td>1475.000</td><td>N/A</td><td>N/A</td><td>2720.902</td><td>10501.000</td><td>4.000</td><td>0.000</td><td>0.085</td><td>0.085</td><td>0.000</td><td>0.000</td><td>0.777</td><td>1.312</td><td>0.884</td><td>3536.540</td><td>1131680.897</td><td>0.101</td><td>0.316</td><td>True</td></tr><tr><td>4</td><td>116.714</td><td>120.706</td><td>146.595</td><td>15.732</td><td>16.789</td><td>16.811</td><td>1108.487</td><td>1117.000</td><td>1137.515</td><td>3.597</td><td>230.181</td><td>93.750</td><td>41.984</td><td>326.389</td><td>68.000</td><td>0.220</td><td>4.000</td><td>0.000</td><td>1033.600</td><td>230.093</td><td>0.000</td><td>239.430</td><td>24.250</td><td>1475.000</td><td>N/A</td><td>N/A</td><td>2574.375</td><td>10501.000</td><td>0.000</td><td>0.000</td><td>0.023</td><td>0.023</td><td>0.000</td><td>0.000</td><td>0.252</td><td>0.196</td><td>0.241</td><td>12975.413</td><td>4152088.856</td><td>0.025</td><td>0.079</td><td>True</td></tr></tbody></table></div></section>
+  <section><h2>Per-trial cost accounting</h2><div style="overflow:auto"><table><thead><tr><th>Concurrency</th><th>Trial</th><th>Successes</th><th>Errors</th><th>Allocated USD</th><th>Usage USD</th><th>Allocated USD/request</th><th>Usage USD/request</th><th>Input USD/1M</th><th>Output USD/1M</th><th>Blended USD/1M</th><th>Wh/request</th></tr></thead><tbody><tr><td>1</td><td>1</td><td>300</td><td>0</td><td>0.085</td><td>0.085</td><td>0.000</td><td>0.000</td><td>0.777</td><td>1.312</td><td>0.884</td><td>0.101</td></tr><tr><td>4</td><td>1</td><td>300</td><td>0</td><td>0.023</td><td>0.023</td><td>0.000</td><td>0.000</td><td>0.252</td><td>0.196</td><td>0.241</td><td>0.025</td></tr></tbody></table></div></section>
+  <section><h2>Trial variability (95% confidence)</h2><div style="overflow:auto"><table><thead><tr><th>Concurrency</th><th>Metric</th><th>Mean</th><th>95% CI half-width</th><th>CV</th></tr></thead><tbody><tr><td>1</td><td>TTFT P95</td><td>50.996 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>TTFT P99</td><td>60.841 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>AIPerf ITL P95</td><td>15.462 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>AIPerf ITL P99</td><td>15.682 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>E2E P95</td><td>1024.362 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>E2E P99</td><td>1045.703 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>1</td><td>Request throughput</td><td>0.980 req/s</td><td>±0.000 req/s</td><td>0.00%</td></tr><tr><td>1</td><td>Output-token throughput</td><td>62.742 tok/s</td><td>±0.000 tok/s</td><td>0.00%</td></tr><tr><td>4</td><td>TTFT P95</td><td>120.706 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>TTFT P99</td><td>146.595 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>AIPerf ITL P95</td><td>16.789 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>AIPerf ITL P99</td><td>16.811 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>E2E P95</td><td>1117.000 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>E2E P99</td><td>1137.515 ms</td><td>±0.000 ms</td><td>0.00%</td></tr><tr><td>4</td><td>Request throughput</td><td>3.597 req/s</td><td>±0.000 req/s</td><td>0.00%</td></tr><tr><td>4</td><td>Output-token throughput</td><td>230.181 tok/s</td><td>±0.000 tok/s</td><td>0.00%</td></tr></tbody></table></div></section>
+  <section><h2>Latency</h2><img src="charts/latency.svg" alt="Latency by concurrency"></section>
+  <section><h2>Throughput</h2><img src="charts/throughput.svg" alt="Throughput by concurrency"></section>
+  <section><h2>Server token rates</h2><img src="charts/server-token-rates.svg" alt="Prometheus server token rates by concurrency"></section>
+  <section><h2>Server latency</h2><img src="charts/server-latency.svg" alt="Prometheus server latency by concurrency"></section>
+  <section><h2>Cost efficiency</h2><img src="charts/cost.svg" alt="Cost by concurrency"></section>
+  <section><h2>GPU efficiency</h2><img src="charts/gpu.svg" alt="GPU utilization by concurrency"></section>
+  <section><h2>GPU memory</h2><img src="charts/memory.svg" alt="GPU memory by concurrency"></section>
+  <section><h2>Power and temperature</h2><img src="charts/power-temperature.svg" alt="Power and temperature by concurrency"></section>
+  <section><h2>GPU PCIe traffic</h2><img src="charts/gpu-pcie.svg" alt="GPU PCIe traffic by concurrency"></section>
+  <section><h2>GPU clocks</h2><img src="charts/gpu-clocks.svg" alt="GPU clocks by concurrency"></section>
+  <section><h2>GPU health signals</h2><img src="charts/gpu-health.svg" alt="GPU throttle and XID signals by concurrency"></section>
+  <section><h2>KV cache and queue</h2><img src="charts/runtime-pressure.svg" alt="KV cache and request queue by concurrency"></section>
+  <section><h2>Energy intensity</h2><img src="charts/energy.svg" alt="Energy per request by concurrency"></section>
+  <section><h2>Throughput, latency, and cost frontier</h2><img src="charts/frontier.svg" alt="Frontier points by concurrency"></section>
+  <section><h2>Cost reconciliation</h2>
+    <p>Rate audit: <strong>$0.126202</strong>; OpenCost allocated: <strong>$0.120040</strong>; difference: $0.006162; permitted tolerance: $0.016633; status: <strong>pass</strong>.</p>
+    <p>Measured allocated / usage cost per successful request: $0.000180 / $0.000180.</p>
+    <p>Measured input / output / blended cost per million tokens: $0.5143 / $0.7539 / $0.5622.</p>
+    <p>Measured energy: 0.037884 kWh; 0.197314 kWh per million tokens.</p>
+  </section>
+  <section><h2>Cost provenance</h2>
+    <p>Vast.ai · 1x NVIDIA GeForce RTX 4090 48 GiB VM, 30 vCPU, 98 GiB RAM · provider-not-disclosed</p>
+    <p>Whole-node USD/hour: <strong>0.998000</strong>; effective 2026-10-12; power included.</p>
+    <p><a href="https://cloud.vast.ai/">User-confirmed billing portal</a> · profile SHA-256 <code>bc85a4a63ec77d8f4625be84a1dc50018ee10349c65dfd9b10a2c84552da7405</code></p>
+    <p class="muted">Costs are transparent rate-based estimates, not a provider invoice. Allocated cost includes idle node time; usage cost is an efficiency view. Per-trial charges use the reviewed node hourly rate times exact elapsed time, attributed by OpenCost's model share; usage and input/output splits retain OpenCost's measured proportions. This avoids treating coarse short-window OpenCost totals as exact elapsed billing.</p>
+  </section>
+  <section><h2>Reproducibility</h2>
+    <p>Git commit <code>5ff2d4f33644bd2bfd0b912a4f1a12558601077d</code> · tree state <strong>dirty</strong> · workspace SHA-256 <code>785ccbe076c5aa3bc6f1f5e668b04f8499fe15e4bf56ec44f2c427633c0d7db6</code></p>
+    <p>AIPerf <strong>0.12.0</strong> · image <code>nvcr.io/nvidia/ai-dynamo/aiperf:0.12.0@sha256:6eab5ee35be06e72c79fdd8017fcd60b08c187399dcdb3bf9b8087f7351149bf</code></p>
+    <p>Runtime profile <strong>qwen2.5-7b-instruct</strong> · profile SHA-256 <code>9d19197243a00d5e37ce8dd5588e827283746249d954becdd0946d8e486a54da</code> · NVIDIA-GeForce-RTX-4090 × 1</p>
+    <p>Serving Pod UID <code>984f9f35-dbac-4b6c-a60a-6f9e9cfecbdc</code> · restart count held at <strong>0</strong> for the full run.</p>
+    <p>Component versions: <code>{&quot;aiperf&quot;:&quot;0.12.0&quot;,&quot;cilium&quot;:&quot;1.20.1&quot;,&quot;containerd&quot;:&quot;2.3.4&quot;,&quot;dcgmExporter&quot;:&quot;4.6.0-4.8.3-distroless&quot;,&quot;gpuOperator&quot;:&quot;v26.7.0&quot;,&quot;grafanaChart&quot;:&quot;13.2.4&quot;,&quot;helm&quot;:&quot;3.21.4&quot;,&quot;kubePrometheusStack&quot;:&quot;91.4.0&quot;,&quot;kubernetes&quot;:&quot;1.36.4&quot;,&quot;nvidiaDriver&quot;:&quot;580.95.05&quot;,&quot;opencost&quot;:&quot;1.121.1&quot;,&quot;prometheus&quot;:&quot;v3.14.0-distroless&quot;,&quot;vllm&quot;:&quot;v0.29.0&quot;}</code></p>
+  </section>
+  <section><h2>Grafana drill-down</h2><ul><li><a href="http://localhost:3000/d/kip-platform-fleet?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">Platform fleet</a></li><li><a href="http://localhost:3000/d/kip-model-serving?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">Model serving</a></li><li><a href="http://localhost:3000/d/kip-gpu-node-health?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">GPU and node</a></li><li><a href="http://localhost:3000/d/kip-distributed-topology?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">Distributed topology</a></li><li><a href="http://localhost:3000/d/kip-benchmark-explorer?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">Benchmark explorer</a></li><li><a href="http://localhost:3000/d/kip-inference-cost?from=2026-10-12T18%3A56%3A47.540787Z&amp;to=2026-10-12T19%3A04%3A22.779008Z&amp;var-runtime=vllm&amp;var-model_name=qwen2.5-7b-instruct&amp;var-model_profile=qwen2.5-7b-instruct">Inference cost</a></li></ul></section>
+  <section><h2>Data quality</h2><p>Status: <strong>warning</strong></p><ul><li>GPU PCIe throughput profiling was not exposed by DCGM for one or more trial windows; PCIe report values are N/A, not zero.</li></ul></section>
+</main></body></html>

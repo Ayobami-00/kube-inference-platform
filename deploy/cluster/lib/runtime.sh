@@ -5,6 +5,36 @@
 KIP_CONTAINERD_WAS_PRESENT=0
 KIP_CONTAINERD_RETRY_OWNED=0
 
+kip_stock_containerd_can_adopt() {
+    local config_file="$KIP_ETC_ROOT/containerd/config.toml" namespace
+    local namespaces remaining
+
+    # Some dedicated hosts arrive with Docker's otherwise unused containerd.io
+    # package. Adopt only the unmodified vendor configuration and an empty
+    # daemon; never overwrite a runtime that contains workloads or images.
+    [ -r "$config_file" ] || return 1
+    [ ! -e "$KIP_ETC_ROOT/kubernetes/admin.conf" ] || return 1
+    kip_has_command ctr || return 1
+    command awk '
+        /^[[:space:]]*(#|$)/ { next }
+        /^[[:space:]]*disabled_plugins[[:space:]]*=[[:space:]]*\[[[:space:]]*"cri"[[:space:]]*\][[:space:]]*$/ { count++; next }
+        { invalid = 1 }
+        END { exit !(count == 1 && !invalid) }
+    ' "$config_file" || return 1
+    namespaces=$(kip_exec ctr namespaces list --quiet 2>/dev/null) || return 1
+    for namespace in $namespaces; do
+        remaining=$(kip_exec ctr -n "$namespace" tasks list --quiet 2>/dev/null) \
+            || return 1
+        [ -z "$remaining" ] || return 1
+        remaining=$(kip_exec ctr -n "$namespace" containers list --quiet 2>/dev/null) \
+            || return 1
+        [ -z "$remaining" ] || return 1
+        remaining=$(kip_exec ctr -n "$namespace" images list --quiet 2>/dev/null) \
+            || return 1
+        [ -z "$remaining" ] || return 1
+    done
+}
+
 kip_cluster_kernel_preparation_is_owned() {
     [ -r "$KIP_ETC_ROOT/modules-load.d/kube-inference-platform.conf" ] \
         && [ -r "$KIP_ETC_ROOT/sysctl.d/99-kube-inference-platform.conf" ] \
@@ -59,7 +89,10 @@ kip_check_runtime_conflicts() {
     if kip_package_installed containerd.io; then
         KIP_CONTAINERD_WAS_PRESENT=1
         installed_containerd=$(kip_package_version containerd.io)
-        [ "$installed_containerd" = "$expected_containerd" ] || return 1
+        if [ "$installed_containerd" != "$expected_containerd" ]; then
+            kip_stock_containerd_can_adopt || return 1
+            KIP_CONTAINERD_RETRY_OWNED=1
+        fi
     fi
     for package_name in containerd runc docker.io docker-ce cri-o; do
         if kip_package_installed "$package_name"; then
@@ -73,6 +106,8 @@ kip_check_runtime_conflicts() {
         elif [ "$KIP_CONTAINERD_WAS_PRESENT" -eq 1 ] \
             && kip_cluster_kernel_preparation_is_owned; then
             KIP_CONTAINERD_RETRY_OWNED=1
+        elif [ "$KIP_CONTAINERD_RETRY_OWNED" -eq 1 ]; then
+            :
         else
             return 1
         fi

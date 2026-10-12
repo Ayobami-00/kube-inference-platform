@@ -44,11 +44,13 @@ from bench.config import (  # noqa: E402
 from bench.errors import BenchError, ExternalCommandError  # noqa: E402
 from bench.pipeline import (  # noqa: E402
     DEFAULT_RUNTIME_IMAGE,
+    _gpu_driver_version_from_nodes,
     _grafana_credentials,
     _live_runtime_workload_identity,
     _platform_identity_from_objects,
     _wait_for_observability_convergence,
     collect_telemetry,
+    collect_trial_cost,
     complete_and_publish_run,
     normalize_aiperf_summary,
     normalize_run,
@@ -97,6 +99,26 @@ def runtime_profile_sha256() -> str:
         (ROOT / "deploy/runtime/vllm/profiles/qwen2.5-7b-instruct.json").read_text()
     )
     return config_hash(profile)
+
+
+def test_gpu_driver_version_uses_live_node_label() -> None:
+    nodes = {
+        "items": [
+            {
+                "metadata": {
+                    "labels": {
+                        "nvidia.com/cuda.driver-version.full": "580.95.05",
+                    }
+                },
+                "status": {"capacity": {"nvidia.com/gpu": "1"}},
+            }
+        ]
+    }
+    assert _gpu_driver_version_from_nodes(nodes) == "580.95.05"
+
+    nodes["items"][0]["metadata"]["labels"].pop("nvidia.com/cuda.driver-version.full")
+    with pytest.raises(BenchError, match="installed NVIDIA driver version"):
+        _gpu_driver_version_from_nodes(nodes)
 
 
 @pytest.fixture
@@ -765,6 +787,58 @@ def test_collect_telemetry_excludes_neighboring_windows() -> None:
     assert not any("[5m]" in expression or "rate5m" in expression for expression, *_ in exact)
 
 
+def test_collect_telemetry_marks_unsupported_gpu_pcie_as_unavailable() -> None:
+    class PrometheusFixture:
+        def query_range(self, expression, *, start, end, step):
+            if "DCGM_FI_PROF_PCIE_" in expression:
+                return []
+            timestamp = (
+                datetime.fromisoformat(end.replace("Z", "+00:00")).timestamp()
+                if "increase(" in expression
+                else datetime.fromisoformat("2026-09-01T00:00:30+00:00").timestamp()
+            )
+            return [{"metric": {}, "values": [[timestamp, "1"]]}]
+
+    telemetry = collect_telemetry(
+        PrometheusFixture(),
+        start="2026-09-01T00:00:00Z",
+        end="2026-09-01T00:01:00Z",
+        context_seconds=120,
+        model_name="qwen2.5-7b-instruct",
+        runtime="vllm",
+        model_profile="qwen2.5-7b-instruct",
+    )
+    assert telemetry["gpuPcieTxAverageBytesPerSecond"] is None
+    assert telemetry["gpuPcieRxAverageBytesPerSecond"] is None
+    assert telemetry["powerAverageWatts"] == 1
+
+
+def test_short_trial_cost_uses_exact_node_time_and_opencost_shares() -> None:
+    class OpenCostFixture:
+        def allocation(self, *, start, end, share_idle):
+            assert share_idle is True
+            return {"data": [{"totalCost": 0.00194}]}
+
+        def inference_cost(self, *, start, end, cost_basis, model_name):
+            assert model_name == "qwen2.5-7b-instruct"
+            total = 0.00194 if cost_basis == "allocation" else 0.001455
+            return {"data": [{"totalCost": total, "inputCost": 0.001455, "outputCost": 0.000485}]}
+
+    cost = collect_trial_cost(
+        OpenCostFixture(),
+        start="2026-10-12T18:27:53Z",
+        end="2026-10-12T18:28:21Z",
+        energy_kwh=0.001,
+        model_name="qwen2.5-7b-instruct",
+        node_hourly_rate_usd=0.998,
+    )
+    exact = 0.998 * 28 / 3600
+    assert cost["allocatedUsd"] == pytest.approx(exact)
+    assert cost["usageUsd"] == pytest.approx(exact * 0.75)
+    assert cost["inputUsd"] == pytest.approx(exact * 0.75)
+    assert cost["outputUsd"] == pytest.approx(exact * 0.25)
+
+
 def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
     cost_profile, tmp_path: Path, monkeypatch
 ) -> None:
@@ -830,13 +904,13 @@ def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
 
         def query_range(self, expression, *, start, end, step):
             self.queries.append((expression, start, end))
-            if "utilization_ratio" in expression or "usage_ratio" in expression:
+            if "DCGM_FI_DEV_GPU_UTIL / 100" in expression or "usage_ratio" in expression:
                 value = "0.5"
-            elif "memory_used" in expression:
+            elif "DCGM_FI_DEV_FB_USED" in expression:
                 value = "17000000000"
-            elif "power_watts" in expression:
+            elif "DCGM_FI_DEV_POWER_USAGE" in expression:
                 value = "120"
-            elif "temperature" in expression:
+            elif "DCGM_FI_DEV_GPU_TEMP" in expression:
                 value = "68"
             else:
                 value = "3"
@@ -863,10 +937,10 @@ def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
             share_idle=True,
         ):
             assert aggregate == "namespace,controllerKind,controller"
-            assert start == receipt["startedAt"]
-            assert end == receipt["endedAt"]
             assert share_idle is True
-            return {"data": [{"totalCost": 1.2}]}
+            if start == receipt["startedAt"] and end == receipt["endedAt"]:
+                return {"data": [{"totalCost": 1.2}]}
+            return {"data": [{"totalCost": 0.04}]}
 
     prometheus = PrometheusFixture()
     opencost = OpenCostFixture()
@@ -898,6 +972,8 @@ def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
     assert normalized["trials"][0]["telemetry"]["serverTtftP95Ms"] == 3000
     assert normalized["trials"][0]["telemetry"]["gpuPcieTxAverageBytesPerSecond"] == 3
     assert normalized["trials"][0]["cost"]["energyKwh"] == pytest.approx(0.002)
+    assert normalized["trials"][0]["cost"]["allocatedUsd"] == pytest.approx(0.02)
+    assert normalized["trials"][0]["cost"]["usageUsd"] == pytest.approx(0.015)
     assert normalized["opencost"]["allocatedUsd"] == 1.2
     assert normalized["dataQuality"]["status"] == "warning"
     first_start = datetime.fromisoformat(prometheus.queries[0][1].replace("Z", "+00:00"))
@@ -913,8 +989,8 @@ def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
         'model_profile="qwen2.5-7b-instruct"' in expression
         for expression, _start, _end in prometheus.queries
     )
-    assert any("kip:gpu:runtime_utilization_ratio" in query[0] for query in prometheus.queries)
-    assert any("kip:gpu:runtime_power_watts" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_DEV_GPU_UTIL" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_DEV_POWER_USAGE" in query[0] for query in prometheus.queries)
     assert any("increase(vllm:prompt_tokens_total" in query[0] for query in prometheus.queries)
     assert any("increase(vllm:generation_tokens_total" in query[0] for query in prometheus.queries)
     assert any("increase(vllm:prefix_cache_hits_total" in query[0] for query in prometheus.queries)
@@ -939,12 +1015,10 @@ def test_normalize_run_joins_aiperf_prometheus_and_opencost_exact_windows(
     assert all(query_start == query_end for _expression, query_start, query_end in exact_queries)
     assert not any("rate5m" in expression for expression, _start, _end in prometheus.queries)
     assert not any("kip:latency:" in expression for expression, _start, _end in prometheus.queries)
-    assert any(
-        "kip:gpu:runtime_pcie_tx_bytes_per_second" in query[0] for query in prometheus.queries
-    )
-    assert any("kip:gpu:runtime_sm_clock_mhz" in query[0] for query in prometheus.queries)
-    assert any("kip:gpu:runtime_clock_throttle" in query[0] for query in prometheus.queries)
-    assert any("kip:gpu:runtime_xid_errors" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_PROF_PCIE_TX_BYTES" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_DEV_SM_CLOCK" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_DEV_CLOCKS_EVENT_REASONS" in query[0] for query in prometheus.queries)
+    assert any("DCGM_FI_DEV_XID_ERRORS" in query[0] for query in prometheus.queries)
     assert opencost.inference_calls[0] == (
         timeline[0]["startedAt"],
         timeline[0]["endedAt"],
@@ -1389,6 +1463,24 @@ def test_execute_run_invokes_publication_finalizer_automatically(
     }
     assert identity_calls == ["captured", "captured"]
     assert environment_calls == ["captured", "captured"]
+    assert cell_timeouts == [21600, 21600]
+
+    # A failed publication may leave all AIPerf cells complete. Resuming must
+    # retry only finalization and keep the original measured experiment window.
+    monkeypatch.setattr("bench.pipeline._find_summary", lambda _path: {})
+    monkeypatch.setattr("bench.pipeline.normalize_aiperf_summary", lambda *_args: {})
+    resumed = execute_run(
+        suite,
+        cost_profile,
+        "baseline-small",
+        resume=True,
+        executor=ExecutorFixture(),
+        finalizer=finalizer,
+    )
+    assert resumed["publication"] == {"report": "published"}
+    assert resumed["run"]["endedAt"] == result["run"]["endedAt"]
+    assert resumed["run"]["timeline"] == result["run"]["timeline"]
+    assert len(resumed["run"]["resumeHistory"]) == 1
     assert cell_timeouts == [21600, 21600]
 
 
@@ -1852,6 +1944,30 @@ def test_report_generation_is_complete_deterministic_and_sanitized(
     published = "\n".join(path.read_text() for path in first.rglob("*") if path.is_file())
     assert "rawPrompt" not in published
     assert "163.192.48.81" not in published
+
+
+def test_report_discloses_unavailable_gpu_pcie_without_fabricating_zero(
+    cost_profile, tmp_path: Path
+) -> None:
+    data = normalized_report_data(cost_profile)
+    for trial in data["trials"]:
+        trial["telemetry"]["gpuPcieTxAverageBytesPerSecond"] = None
+        trial["telemetry"]["gpuPcieRxAverageBytesPerSecond"] = None
+    data["dataQuality"] = {
+        "status": "warning",
+        "warnings": ["GPU PCIe profiling unavailable on this device"],
+        "missingSeries": [
+            "kip:gpu:runtime_pcie_tx_bytes_per_second",
+            "kip:gpu:runtime_pcie_rx_bytes_per_second",
+        ],
+    }
+    output = generate_report(
+        data, run_id="baseline-fixture", cost_profile=cost_profile, output=tmp_path / "report"
+    )
+    summary = json.loads((output / "summary.json").read_text())
+    assert summary["concurrencyResults"][0]["gpuPcieTxAverageBytesPerSecond"] is None
+    assert "N/A: telemetry unavailable on this GPU" in (output / "charts/gpu-pcie.svg").read_text()
+    assert "GPU PCIe profiling unavailable" in (output / "index.html").read_text()
 
 
 def test_report_rebuild_atomically_replaces_only_the_same_run(cost_profile, tmp_path: Path) -> None:
