@@ -13,6 +13,8 @@ RETAIN_DAYS ?= 30
 SERVE_HOST ?= 127.0.0.1
 SERVE_PORT ?= 8008
 CONFIRM_DESTROY ?=
+FLEET_ALLOW_MIXED ?= 0
+FLEET_GPU_COUNT ?= 1
 ARTIFACT_VALIDATOR_CACHE ?= $(CURDIR)/.cache/artifact-validators
 PROMTOOL ?= $(ARTIFACT_VALIDATOR_CACHE)/bin/promtool
 HELM ?= $(ARTIFACT_VALIDATOR_CACHE)/bin/helm
@@ -31,6 +33,11 @@ DEPLOY_SCRIPTS := $(shell find deploy -type f -name '*.sh' -print | sort)
 	observability-install observability-smoke cost-configure cost-check cost-show \
 	benchmark-setup benchmark-install benchmark-check benchmark-help benchmark \
 	benchmark-resume benchmark-report benchmark-list benchmark-serve benchmark-clean \
+	workload-validate workload-preview fleet-compat-check fleet-plan fleet-first-worker-up fleet-control-up \
+	fleet-first-worker-down fleet-check fleet-network-smoke fleet-gpu-install \
+	fleet-certify-control fleet-gpu2-up fleet-gpu2-down fleet-cache-prepare fleet-large-image-pull \
+	fleet-model-install fleet-observability-install fleet-cost-snapshot fleet-cost-install fleet-cost-check campaign-smoke campaign-text-replay campaign-accounting campaign-report workload-generate \
+	llmd-install llmd-smoke tenant-install fleet-down \
 	bootstrap destroy
 
 help:
@@ -73,6 +80,35 @@ help:
 	@echo "  benchmark-serve  Serve a generated report on localhost"
 	@echo "  benchmark-help   Show the benchmark platform commands"
 	@echo "  benchmark-clean  Remove expired local work and node result archives"
+	@echo "  workload-validate  Validate the reviewed multi-tenant pilot workload contract"
+	@echo "  workload-preview  Preview deterministic metadata (TENANT, CLASS, TRIAL)"
+	@echo "  fleet-plan      Read-only Vast offers, credit, and three-node budget preflight"
+	@echo "  fleet-first-worker-up  Rent only the first owned GPU VM for control validation"
+	@echo "  fleet-control-up  Rent only the staged, task-owned control-plane VM"
+	@echo "  fleet-certify-control  Repeat two-node network/GPU gates before scaling"
+	@echo "  fleet-gpu2-up  Rent the second worker only after the control checkpoint"
+	@echo "  fleet-gpu2-down  Release an unjoined, exactly owned second worker (CONFIRM_DESTROY=1)"
+	@echo "  fleet-first-worker-down  Destroy only the owned first GPU VM (CONFIRM_DESTROY=1)"
+	@echo "  fleet-compat-check  Validate the pilot's immutable offline artifact contract"
+	@echo "  fleet-check     Read-only exact node, GPU, and core-pod validation"
+	@echo "  fleet-network-smoke  Temporary cross-node Pod/Service/DNS check (on control VM)"
+	@echo "  fleet-gpu-install  Install GPU Operator and smoke each worker (on control VM)"
+	@echo "  fleet-cache-prepare  Prepare a persistent model cache on an owned GPU worker"
+	@echo "  fleet-large-image-pull  Bounded containerd timeout for large fleet images"
+	@echo "  fleet-model-install  Deploy two KIP-owned vLLM replicas on the certified fleet"
+	@echo "  fleet-observability-install  Install internal fleet Prometheus/Grafana/DCGM scrapes"
+	@echo "  fleet-cost-snapshot  Record current task-owned Vast billed rates locally"
+	@echo "  fleet-cost-install  Configure exact per-node OpenCost CSV prices on control VM"
+	@echo "  fleet-cost-check  Reconcile a complete node-cost minute against Vast rates"
+	@echo "  campaign-smoke  Run a reviewed authenticated AIPerf Gateway checkpoint"
+	@echo "  campaign-text-replay  Replay a generated pilot text trace through AIPerf"
+	@echo "  campaign-accounting  Reconcile a replay across AIPerf, Gateway, and EPP"
+	@echo "  campaign-report  Publish a sanitized partial three-tenant text report"
+	@echo "  workload-generate  Generate ignored, seeded AIPerf text traces from pilot-v1"
+	@echo "  llmd-install   Install pinned private Envoy AI Gateway and llm-d request path"
+	@echo "  llmd-smoke     Smoke the private Gateway (set GATEWAY_URL)"
+	@echo "  tenant-install  Install fail-closed pilot tenant authorization on control VM"
+	@echo "  fleet-down     Release only exact task-owned pilot VMs (CONFIRM_DESTROY=1)"
 	@echo "  bootstrap      Compose the complete v0.1 platform installation"
 	@echo "  destroy        Remove KIP-managed platform state for a fresh run"
 
@@ -107,7 +143,7 @@ artifact-structural-check:
 artifact-acceptance-check: artifact-check
 
 test:
-	$(UV) run pytest
+	$(UV) run python -m pytest
 
 check: lint format-check deploy-script-check artifact-check test
 
@@ -176,9 +212,11 @@ cost-show:
 		./deploy/observability/cost.sh show
 
 benchmark-setup:
-	$(UV) sync --group benchmark
+	@bash ./deploy/benchmark/setup.sh
+	$(UV) python install 3.12.9
+	$(UV) sync --python 3.12.9 --group benchmark --locked
 
-benchmark-install:
+benchmark-install: benchmark-setup
 	$(UV) run --group benchmark python -m bench install
 
 benchmark-check:
@@ -207,6 +245,110 @@ benchmark-serve:
 
 benchmark-clean:
 	$(UV) run --group benchmark python -m bench clean --retain-days "$(RETAIN_DAYS)"
+
+workload-validate:
+	$(UV) run python -m bench workload-validate --contract pilot-v1
+
+workload-preview:
+	$(UV) run python -m bench workload-preview --contract pilot-v1 \
+		--tenant "$(or $(TENANT),tenant-a)" --class "$(or $(CLASS),chat)" \
+		--trial "$(or $(TRIAL),1)"
+
+fleet-plan:
+	@case "$(FLEET_ALLOW_MIXED)" in 0|1) ;; *) echo 'FLEET_ALLOW_MIXED must be 0 or 1' >&2; exit 2;; esac
+	$(UV) run python -m fleet plan $(if $(filter 1,$(FLEET_ALLOW_MIXED)),--allow-mixed,)
+
+fleet-first-worker-up:
+	$(UV) run python -m fleet rent-first
+
+fleet-control-up:
+	$(UV) run python -m fleet rent-control
+
+fleet-certify-control:
+	$(UV) run python -m fleet certify-control
+
+fleet-gpu2-up:
+	$(UV) run python -m fleet rent-gpu2
+
+fleet-gpu2-down:
+	@test "$(CONFIRM_DESTROY)" = "1" || { echo 'Set CONFIRM_DESTROY=1' >&2; exit 2; }
+	$(UV) run python -m fleet release-gpu2
+
+fleet-first-worker-down:
+	@test "$(CONFIRM_DESTROY)" = "1" || { echo 'Set CONFIRM_DESTROY=1' >&2; exit 2; }
+	$(UV) run python -m fleet release-first
+
+fleet-compat-check:
+	$(UV) run python -m fleet compat-check
+
+fleet-check:
+	$(UV) run python -m fleet check --inventory "$(or $(INVENTORY),fleet/.work/pilot.json)"
+
+fleet-network-smoke:
+	./deploy/fleet/network-smoke.sh
+
+fleet-gpu-install:
+	@KIP_VERBOSE="$(VERBOSE)" KIP_FLEET_GPU_COUNT="$(FLEET_GPU_COUNT)" \
+		./deploy/fleet/gpu-install.sh
+
+fleet-cache-prepare:
+	./deploy/fleet/cache-prepare.sh
+
+fleet-large-image-pull:
+	./deploy/fleet/large-image-pull.sh
+
+fleet-model-install:
+	./deploy/fleet/model-install.sh
+
+fleet-observability-install:
+	@KIP_VERBOSE="$(VERBOSE)" ./deploy/fleet/observability-install.sh
+
+fleet-cost-snapshot:
+	@$(UV) run python -m fleet.cost_ledger
+
+fleet-cost-install:
+	@KIP_VERBOSE="$(VERBOSE)" ./deploy/fleet/cost-install.sh
+
+fleet-cost-check:
+	@python3 -m fleet.cost_check
+
+campaign-smoke:
+	@UV_CACHE_DIR=.cache/uv $(UV) run --group benchmark --frozen python -m fleet.aiperf_smoke \
+		--tenant "$(or $(TENANT),tenant-a)" --class "$(or $(WORKLOAD_CLASS),chat)"
+
+campaign-text-replay:
+	@UV_CACHE_DIR=.cache/uv $(UV) run --group benchmark --frozen python -m fleet.aiperf_text \
+		--tenant "$(or $(TENANT),tenant-a)" --class "$(or $(WORKLOAD_CLASS),chat)" \
+		--trial "$(or $(TRIAL),1)" --profile "$(or $(AIPERF_PROFILE),pilot-text-replay)" \
+		$(if $(RUN_ID),--run-id "$(RUN_ID)",)
+
+campaign-accounting:
+	@UV_CACHE_DIR=.cache/uv $(UV) run --group benchmark --frozen python -m fleet.aiperf_accounting \
+		--run-id "$(RUN_ID)" --tenant "$(or $(TENANT),tenant-a)" \
+		--class "$(or $(WORKLOAD_CLASS),chat)"
+
+campaign-report:
+	@UV_CACHE_DIR=.cache/uv $(UV) run --group benchmark --frozen python -m bench.pilot_report \
+		--run-id "$(RUN_ID)" $(if $(SCENARIO),--scenario "$(SCENARIO)",)
+
+workload-generate:
+	@UV_CACHE_DIR=.cache/uv $(UV) run --group benchmark --frozen python -m bench.pilot_dataset \
+		--tenant "$(or $(TENANT),tenant-a)" --class "$(or $(WORKLOAD_CLASS),chat)" \
+		--trial "$(or $(TRIAL),1)" --sessions "$(or $(SESSIONS),12)" --rate "$(or $(RATE),1.0)"
+
+llmd-install:
+	./deploy/fleet/llmd-install.sh
+
+llmd-smoke:
+	python3 ./deploy/fleet/llmd-smoke.py --url "$(GATEWAY_URL)" \
+		--runs "$(or $(SMOKE_RUNS),1)" --parallel "$(or $(SMOKE_PARALLEL),1)"
+
+tenant-install:
+	./deploy/fleet/tenant-install.sh
+
+fleet-down:
+	@test "$(CONFIRM_DESTROY)" = "1" || { echo 'Set CONFIRM_DESTROY=1' >&2; exit 2; }
+	$(UV) run python -m fleet release-fleet
 
 bootstrap:
 	@$(MAKE) --no-print-directory host-setup VERBOSE="$(VERBOSE)"

@@ -47,9 +47,10 @@ flow.
 ├── bench/                  AIPerf orchestration and static report generation
 ├── benchmarks/             Reviewed suites, Kubernetes assets, work data, and reports
 ├── costs/profiles/         Reviewed whole-node pricing profiles
-├── deploy/                 Host, cluster, GPU, runtime, and observability assets
+├── deploy/                 Host, cluster, GPU, runtime, observability, and pilot locks
 ├── docs/                   Architecture documentation
 ├── experiments/baseline/   Reproducible baseline experiment record
+├── fleet/                  Read-only Vast pilot planning and node checks (in progress)
 ├── tests/                  Benchmark and deployment-tooling tests
 ├── Makefile                Local development commands
 └── pyproject.toml          Python project and tool configuration
@@ -742,3 +743,168 @@ report whose allocated cost reconciles with the configured node price.
 
 The Go operator, custom gateway, authentication, rate limiting, autoscaling, multi-replica
 routing, and multi-node inference are deliberately deferred until this baseline is proven.
+
+## Multi-tenant llm-d pilot (in progress)
+
+The separate pilot does not change the v0.1 `bootstrap` and `destroy`
+contracts. The reviewed synthetic workload and **proposed**, not yet accepted, SLOs live in
+[`benchmarks/workloads/pilot-v1.json`](benchmarks/workloads/pilot-v1.json), with precise
+measurement boundaries in its adjacent README. `make workload-validate` checks the schema;
+`make workload-preview TENANT=tenant-a CLASS=chat TRIAL=1` prints deterministic **metadata**,
+not request content. `make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=1
+SESSIONS=4 RATE=0.8` writes a deterministic, ignored, mode-0600 AIPerf dataset and
+manifest. The input rate is synthetic session arrivals per second, not a verified
+capacity rating. `make campaign-text-replay` then sends the previously generated trace
+through the private Gateway using AIPerf 0.12 and the corresponding protected synthetic
+tenant key; it requires HTTP 200 and exactly one final SSE `[DONE]` per planned turn.
+Raw exports contain request headers and are intentionally ignored: do not publish or
+share anything under `benchmarks/.work/`.
+
+The offline request-accounting validator in `bench/pilot_accounting.py` keeps offered,
+sent, admitted, queued, dispatched, completed, rejected, failed, and in-flight counts
+separate. After a replay, `make campaign-accounting RUN_ID=<run-id>
+TENANT=tenant-a WORKLOAD_CLASS=chat` joins private AIPerf correlation IDs to the
+Gateway and llm-d endpoint-picker logs, checks upstream worker attribution, and fails
+if lifecycle or stream-completion evidence is missing. Its output contains aggregate
+counts only. The Gateway's access log records request IDs, status, upstream, and timing,
+not credentials, prompt bodies, or responses.
+
+`make fleet-compat-check` validates the separate immutable pilot artifact lock in
+[`deploy/fleet/versions.json`](deploy/fleet/versions.json). Its status is
+`artifact-locked-target-unvalidated`: image/chart digests have been recorded. The pinned
+vLLM 0.30 CUDA 13 image passed a CUDA tensor smoke check on an RTX 4090 with driver
+580.178.04 and GPU Operator 26.7.0. The private Envoy AI Gateway/llm-d v0.10 path
+has subsequently passed live authenticated streaming and two-worker routing tests on
+the heterogeneous three-node pilot. The v0.1 version pins remain unchanged.
+
+`make fleet-plan` makes only read-only Vast account and offer requests. By default it
+requires matching GPU workers on distinct hosts in one region. With explicit approval,
+`make fleet-plan FLEET_ALLOW_MIXED=1` permits heterogeneous or cross-region candidates;
+that is a *candidate search*, not a network-performance or compatibility acceptance. The
+plan fails closed if available credit cannot cover eight hours of the first worker plus the
+$5 reserve, the proposed active rate exceeds $4/hour, or no eligible three-node offer set
+exists. It reports the additional credit required to restore a $50 balance; a full pilot is
+not promised on the first-worker allowance. Marketplace prices are
+not treated as billed quotes. A changing public VM endpoint is a documented network risk,
+not a substitute for the required stable private WireGuard API name; it must pass live
+reconnect and route checks before join. Keep the API key in ignored `.secrets/vast-api-key`
+with mode `0600`; the planner never prints it. `make fleet-check` inspects a task-owned ignored
+`fleet/.work/pilot.json` and is read-only.
+
+`make fleet-first-worker-up` and `make fleet-first-worker-down CONFIRM_DESTROY=1` manage
+only an exactly labeled, lease-recorded Vast Ubuntu VM. The first GPU worker has passed
+host, Kubernetes, GPU, vLLM, observability, cost, and AIPerf smoke checkpoints on an
+RTX 4090. Its sanitized hardware-matched single-GPU control report is
+[`benchmarks/reports/pilot-control-20261012-r580/index.html`](benchmarks/reports/pilot-control-20261012-r580/index.html).
+This run uses the existing v0.1 vLLM 0.29 runtime, so it is hardware-matched but not a
+software-matched llm-d/vLLM 0.30 comparison. It does not represent multi-tenant traffic.
+
+The now-released task-owned three-node pilot had one non-HA control plane and two
+RTX 4090 workers on distinct, cross-region hosts connected by a private WireGuard
+mesh. Two replicas served the same pinned Qwen revision through `make llmd-install`
+and the internal Gateway; twelve credential/class combinations were enforced by a
+fail-closed tenant authorization service. `make fleet-check` is read-only and must
+run on the control plane or with its private kubeconfig when the fleet is recreated.
+The Prometheus/Grafana/DCGM/OpenCost overlay included fleet routing and per-node
+cost views. Verified Vast node rates, not marketplace estimates, supplied the
+infrastructure audit ledger.
+
+An initial simultaneous A/B/C text smoke completed 46/46 turns, reconciled every
+request through AIPerf, Gateway, and endpoint-picker evidence, and reached both GPU
+workers. Its [sanitized partial report](benchmarks/reports/pilot-text-20261013-012123/index.html)
+records the exact UTC windows, telemetry, and a node-cost reconciliation. It is
+explicitly **not** an accepted campaign result: the sample is below 100 turns per
+class/trial, chat P95 TTFT missed the proposed 1.5-second SLO, and no voice,
+noisy-tenant, worker-failure, rebuild, or confidence-interval trials have run.
+`make campaign-report RUN_ID=<run-id>` publishes the reviewed three-tenant text
+scenario by default, or the reviewed isolated chat calibration with
+`SCENARIO=pilot-chat-calibration` or nine-cohort smoke with
+`SCENARIO=pilot-nine-cohort-smoke`. It requires complete private accounting,
+the exact live EPP policy hash and pre-run Pod creation time, and a passing
+exact-window OpenCost check. The owned EPP Deployment is rolled only when its
+reviewed config hash changes; an exact `make llmd-install` rerun leaves it intact.
+
+The [100-plus-sample mixed text trial](benchmarks/reports/pilot-text-20261013-020105-rolled/index.html)
+completed 367/367 requests across three classes, with near-even worker routing and
+OpenCost within 0.09% of the five-minute Vast rate audit. Batch met its proposed
+10-minute completion target, but chat/agentic P95 TTFT missed their proposed targets;
+the report is deliberately marked **partial**. The
+[isolated tenant-C chat calibration](benchmarks/reports/pilot-text-20261013-020940-calchat/index.html)
+completed 142/142 at 0.2 offered sessions/second, with 1.84-second P95 TTFT—still
+above the proposed 1.5-second target. These measurements do not justify claiming
+nominal SLO acceptance or tuning the target downward without review.
+
+That isolated run exposed a placement problem: the client and tenant authorization
+service ran on `kip-control` in Romania, while Envoy and llm-d EPP had scheduled on
+`kip-gpu-2` in Japan. The reviewed manifests now pin those two CPU request-path
+workloads to `kip-control` with a narrow toleration for its existing control-plane
+`NoSchedule` taint; they do not remove the taint or move the GPU model replicas.
+An initial rollout correctly failed when the toleration was absent, leaving the
+old Gateway serving; the corrected, ownership-gated rerun restored all request-path
+Pods. An authenticated AIPerf smoke passed. Replaying the **identical seeded**
+142-turn trace produced the [colocated calibration report](benchmarks/reports/pilot-text-20261013-024120-colocated/index.html):
+P95 client TTFT fell from 1,844 to 884 ms, while all 142 turns completed and both
+workers served traffic. Measured client-to-Gateway P95 fell from 389 to 9 ms, and
+Gateway-to-EPP dispatch P95 from 558 to 7 ms. The proposed isolated-chat TTFT,
+TPOT, and success checks pass in this one trial; the full nominal mixed campaign
+is still unaccepted. Colocation exposed sub-millisecond timestamp ordering in 26
+requests; accounting normalizes at most 1 ms of instrumentation uncertainty and
+rejects larger reversals, with the count disclosed in the report.
+
+The [nine-cohort matrix smoke](benchmarks/reports/pilot-text-20261013-021640-matrix/index.html)
+exercised each A/B/C tenant with chat, agentic-style, and batch traffic. All 61/61
+planned turns completed with incremental SSE, no rejects or failures, and both GPU
+workers served traffic. The three-minute node-cost audit was $0.10237 versus
+$0.10246 allocated by OpenCost (0.088% difference). This is deliberately a small
+coverage test, not a nominal SLO trial: no cohort has 100 completed samples and
+there are no confidence intervals.
+
+The [colocated mixed-load trial](benchmarks/reports/pilot-text-20261013-024900-colomix/index.html)
+replayed the same three seeded cohorts and offered rates as the earlier 367/367
+trial, now with the Gateway and endpoint picker on the control-plane node. Chat
+completed 136/136 turns and agentic-style replay 131/131, but their P95 TTFTs
+were 5.69 and 2.98 seconds, respectively, missing the proposed targets. Batch
+completed 96/100 turns; four requests waited approximately 60 seconds in
+llm-d flow control and were rejected with HTTP 429 before reaching either model
+worker. The actual EPP queue-depth metric reached 19. The report distinguishes
+all 367 offered/admitted requests from 363 completions and four rejections and
+is **partial**, not a passing nominal campaign. Its five-minute verified node-rate
+audit was $0.204741 versus $0.20494 allocated by OpenCost (0.0972% difference).
+The four AIPerf error records contained zero-duration placeholders, so the
+accounting uses the matching Envoy start time and measured duration for those
+rejection terminal timestamps and discloses that provenance. Lower-load
+calibration and independent trials are required before nominal SLO acceptance.
+
+A subsequent [lower-offered-rate mixed calibration](benchmarks/reports/pilot-text-20261013-082900-lowrate/index.html)
+completed all 345/345 streamed turns (chat 125, agentic-style 120, batch 100)
+with no rejections. Its maximum observed llm-d flow-control queue depth was 13.
+Batch met its proposed success and ten-minute completion checks, but chat P95
+TTFT was 3.75 seconds versus 1.5 proposed and agentic-style P95 TTFT was
+2.01 seconds versus 2 proposed. The ten-minute verified node-rate audit was
+$0.341235 versus $0.34155 allocated by OpenCost (0.0923% difference). This
+is still a single **partial** calibration trial, not an accepted nominal SLO
+result or proof of fairness. The sanitized report was copied locally and
+passed the artifact scan before all three exact task-owned Vast VMs were
+released; Vast subsequently listed none of those instance IDs. Their VM-local
+cache and private raw benchmark traces were removed with the rentals, while
+the sanitized reports and local code remain.
+
+A controlled replica-loss checkpoint removed only the KIP-owned vLLM Pod on
+`kip-gpu-1`. While its replacement was unready, the
+[loss-window report](benchmarks/reports/pilot-text-20261013-022534-loss/index.html)
+recorded 11/11 successful streamed turns, all dispatched to surviving `kip-gpu-2`.
+After rollout restored both replicas, the
+[recovery report](benchmarks/reports/pilot-text-20261013-022700-recovered/index.html)
+recorded another 11/11 turns, dispatched 4/7 across the two workers. Both windows
+passed private AIPerf/Gateway/EPP accounting and reconciled OpenCost to the Vast
+node-rate audit within 0.1%; `make fleet-check` passed after recovery. These small
+tests do **not** establish in-flight request continuity, sustained worker failure
+tolerance, or nominal-load SLO attainment. Use `make campaign-report
+RUN_ID=<run-id> SCENARIO=pilot-worker-loss-during` or
+`SCENARIO=pilot-worker-loss-recovered` to reproduce the respective reports.
+
+Full `campaign-run`, adequately sampled nine-cohort trials, confidence-interval
+trials, voice, sustained worker-failure testing, and rebuild interfaces remain unfinished.
+The pilot fleet is no longer rented. No additional node is rented without fresh
+credit, ownership, compatibility, and spend checks. Preserve the $5 credit reserve
+and do not infer SLO compliance from a single trial.

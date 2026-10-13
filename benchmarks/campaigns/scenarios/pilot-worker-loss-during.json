@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "pilot-worker-loss-during",
+  "kind": "replica-failure-checkpoint",
+  "cohorts": [
+    {"tenant": "tenant-a", "class": "chat"}
+  ]
+}

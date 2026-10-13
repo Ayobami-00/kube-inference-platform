@@ -1,0 +1,68 @@
+{
+  "aiperfVersion": "0.12.0",
+  "cohorts": [
+    {
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=6 SESSIONS=4 RATE=0.8",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=6",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-012123 TENANT=tenant-a WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "f238c577663ba526ffcdbc8d9bab44c1dfa49d4a9b73777b034c3e172e1f2f71",
+      "offeredSessionsPerSecond": 0.8,
+      "seed": 17534024539920371490,
+      "sessions": 4,
+      "tenant": "tenant-a",
+      "trial": 6
+    },
+    {
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=2 SESSIONS=4 RATE=0.6",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=2",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-012123 TENANT=tenant-b WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "94016b6708f4c1ec90233579ddb8ce97eaa7a41668306a61f51b4035fe87177e",
+      "offeredSessionsPerSecond": 0.6,
+      "seed": 2445234250443827678,
+      "sessions": 4,
+      "tenant": "tenant-b",
+      "trial": 2
+    },
+    {
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=2 SESSIONS=4 RATE=1.0",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=2",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-012123 TENANT=tenant-c WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "4df7631bfedff6825b6a81c5f0c8772ceac2aaf9ec31339aa910f6935f72e539",
+      "offeredSessionsPerSecond": 1.0,
+      "seed": 2871005365363742962,
+      "sessions": 4,
+      "tenant": "tenant-c",
+      "trial": 2
+    }
+  ],
+  "components": {
+    "cilium": "1.20.1",
+    "containerd": "2.3.4",
+    "envoyAiGateway": "v0.7.0",
+    "envoyGateway": "v1.8.1",
+    "eppImage": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "gpuOperator": "v26.7.0",
+    "kubernetes": "1.36.4",
+    "llmd": "v0.10.0",
+    "nvidiaDriver": "580.178.04",
+    "vllmImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40"
+  },
+  "costRateSource": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+  "costWindow": "2026-10-13T01:21:00Z,2026-10-13T01:23:00Z",
+  "gitRevision": "not-recorded-on-git-free-control-checkout",
+  "modelManifestSha256": "8e369d667ed8ff4690dff8845e2f8059dfde949e5c531b3dc3b04356758e555f",
+  "reportCommand": "make campaign-report RUN_ID=pilot-text-20261013-012123",
+  "runId": "pilot-text-20261013-012123",
+  "schemaVersion": 1,
+  "versionsLockSha256": "1e9cd50a49745158fea1b6293161f6e3dd3966c3b36f8c49475762238195ddf2",
+  "workloadContractSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

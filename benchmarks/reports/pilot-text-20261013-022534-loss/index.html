@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self';">
+<title>KIP mixed text pilot · pilot-text-20261013-022534-loss</title>
+<style>body{font:16px system-ui;background:#0b1220;color:#e5e7eb;max-width:1050px;margin:40px auto;padding:0 24px}h1,h2{color:#f8fafc}.badge{background:#9a3412;padding:4px 9px;border-radius:5px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #334155;padding:10px;text-align:left}code{color:#7dd3fc}a{color:#7dd3fc}.card{background:#142033;padding:18px;border-radius:9px;margin:20px 0}.small{color:#cbd5e1}</style></head>
+<body><h1>KIP text pilot <span class="badge">PARTIAL</span></h1>
+<p>Run <code>pilot-text-20261013-022534-loss</code> · 2026-10-13T02:25:45.593522Z – 2026-10-13T02:26:30.485389Z</p>
+<p>This is an interim single-trial validation of reviewed synthetic tenant cohorts through the llm-d-routed pilot pool. It is <strong>not</strong> the accepted nominal SLO campaign.</p>
+<div class="card"><h2>Performance and estimated cost</h2><table><thead><tr><th>Tenant</th><th>Class</th><th>Completed</th><th>TTFT P95 ms</th><th>TPOT P95 ms</th><th>E2E P95 ms</th><th>Output tok/s</th><th>Proposed SLO checks</th><th>Tenant estimate USD*</th></tr></thead><tbody><tr><td>tenant-a</td><td>chat</td><td>11</td><td>1211.66</td><td>16.8</td><td>4406.44</td><td>35.13</td><td>success:pass, ttft:pass, tpot:pass</td><td>0.06831</td></tr></tbody></table>
+<p class="small">*Illustrative output-token-share of allocated infrastructure cost; not an invoice or measured per-tenant usage.</p></div>
+<img src="charts/ttft-p95.svg" alt="TTFT P95 by cohort" width="900">
+<div class="card"><h2>Cost audit</h2><p>Verified fleet rental: $2.0474/hour. Exact 2026-10-13T02:25:00Z,2026-10-13T02:27:00Z audit $0.068247; OpenCost idle-inclusive allocation $0.068310; difference 0.092%.</p></div>
+<div class="card"><h2>Data quality and remaining acceptance</h2><ul><li>At least one class has fewer than 100 completed samples in this trial.</li><li>Only one trial per class is present; three independent trials and confidence intervals are required for nominal SLO acceptance.</li><li>This small replica-loss checkpoint does not establish sustained failure tolerance or in-flight request continuity; voice, noisy-tenant stress, and clean rebuild remain untested.</li><li>Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.</li><li>Tenant cost is an output-token-share estimate, not bill-reconciling attribution.</li></ul></div>
+<p><a href="http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T02%3A25%3A00.000000Z&amp;to=2026-10-13T02%3A27%3A00.000000Z&amp;timezone=utc&amp;var-cluster=kip-pilot&amp;var-model=qwen2.5-7b-instruct">Open exact-window Grafana dashboard</a> (requires local port-forward). <a href="summary.json">JSON</a> · <a href="summary.csv">CSV</a> · <a href="reproducibility.json">Reproducibility</a>.</p>
+</body></html>

@@ -1,0 +1,53 @@
+# EPP authenticates metrics scrapes with TokenReview and SubjectAccessReview.
+# This bounded reader is for the pilot's internal validation and Prometheus.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kip-metrics-reader
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kip-epp-metrics-reader
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+rules:
+  - nonResourceURLs: [/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kip-epp-metrics-reader
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+subjects:
+  - kind: ServiceAccount
+    name: kip-metrics-reader
+    namespace: kip-inference
+roleRef:
+  kind: ClusterRole
+  name: kip-epp-metrics-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kip-epp-auth-delegator
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+subjects:
+  - kind: ServiceAccount
+    name: kip-qwen25-pilot-epp
+    namespace: kip-inference
+roleRef:
+  kind: ClusterRole
+  name: system:auth-delegator
+  apiGroup: rbac.authorization.k8s.io

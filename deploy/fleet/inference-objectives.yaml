@@ -1,0 +1,38 @@
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: kip-voice
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: tenant-flow-control
+spec:
+  priority: 100
+  poolRef:
+    name: kip-qwen25-pilot
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: kip-interactive
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: tenant-flow-control
+spec:
+  priority: 0
+  poolRef:
+    name: kip-qwen25-pilot
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: kip-batch
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: tenant-flow-control
+spec:
+  priority: -10
+  poolRef:
+    name: kip-qwen25-pilot

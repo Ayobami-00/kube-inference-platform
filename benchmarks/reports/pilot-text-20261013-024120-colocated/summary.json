@@ -1,0 +1,154 @@
+{
+  "cohorts": [
+    {
+      "class": "chat",
+      "counts": {
+        "admitted": 142,
+        "completed": 142,
+        "dispatched": 142,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 142,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 142
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "a5b169f966523ee621c5917cbc77ada9288456c0396d7d047cf3be8ed670d5d4",
+        "offeredSessionsPerSecond": 0.2,
+        "plannedTurns": 142,
+        "seed": 3772643039879882886,
+        "sessions": 32,
+        "trial": 5
+      },
+      "e2eMs": {
+        "p50": 3324.110893,
+        "p95": 4779.021901,
+        "p99": 5235.088261
+      },
+      "endedAtUtc": "2026-10-13T02:44:18.093870Z",
+      "estimatedTenantUsdByOutputShare": 0.13662,
+      "gatewayDurationP95Ms": 4761.0,
+      "gatewayToEppDispatchP95Ms": 6.613,
+      "inputTokens": 275076,
+      "normalizedEarlyGatewayStarts": 26,
+      "observedSloChecks": {
+        "success": true,
+        "tpot": true,
+        "ttft": true
+      },
+      "observedTtftTargetMet": true,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 8.874,
+      "outputTokens": 23038,
+      "outputTokensPerSecond": 123.735654,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "tpotP95Ms": 100,
+        "ttftP95Ms": 1500
+      },
+      "requestThroughputPerSecond": 0.762673,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 8.958,
+      "sessionCompletionP95Ms": 48347.24,
+      "startedAtUtc": "2026-10-13T02:41:11.906630Z",
+      "successRate": 1.0,
+      "tenant": "tenant-c",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 16.964405,
+        "p95": 18.854779,
+        "p99": 20.798372
+      },
+      "ttftMs": {
+        "p50": 469.39104,
+        "p95": 884.256447,
+        "p99": 1131.60579
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 57,
+        "kip-gpu-2": 85
+      }
+    }
+  ],
+  "cost": {
+    "allocatedUsd": 0.13662,
+    "auditUsd": 0.136494,
+    "basis": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+    "currency": "USD",
+    "fleetHourlyUsd": 2.047407407407407,
+    "nodeHourlyUsd": {
+      "kip-control": 0.6814814814814815,
+      "kip-gpu-1": 0.6222222222222222,
+      "kip-gpu-2": 0.7437037037037036
+    },
+    "rateObservedAtUtc": "2026-10-13T02:45:48.752521Z",
+    "reconciliationPercent": 0.0923,
+    "tenantAttribution": "illustrative output-token share of allocated infrastructure cost; not invoice or measured per-tenant resource usage"
+  },
+  "dataQuality": {
+    "status": "partial",
+    "warnings": [
+      "26 colocated Gateway start timestamps preceded the client send marker by at most 1 ms and were normalized to send time for lifecycle ordering; raw timing evidence remains private.",
+      "Only one trial per class is present; three independent trials and confidence intervals are required for nominal SLO acceptance.",
+      "No voice pipeline, noisy-tenant stress, worker-failure, or clean-rebuild evidence yet.",
+      "Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.",
+      "Tenant cost is an output-token-share estimate, not bill-reconciling attribution."
+    ]
+  },
+  "grafanaUrl": "http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T02%3A41%3A00.000000Z&to=2026-10-13T02%3A45%3A00.000000Z&timezone=utc&var-cluster=kip-pilot&var-model=qwen2.5-7b-instruct",
+  "kind": "isolated-text-calibration",
+  "observedServingWorkers": [
+    "kip-gpu-1",
+    "kip-gpu-2"
+  ],
+  "routing": {
+    "helmRevision": 10,
+    "lastHelmReconcileAtReportUtc": "2026-10-13T02:39:45.842685Z",
+    "picker": "weighted-random-picker",
+    "pickerPodCreatedAtUtc": "2026-10-13T02:40:23.000000Z",
+    "valuesSha256": "f3812c54f98aa410415c6a55559d42801158315fc9923057d4fb0ec166e952d7"
+  },
+  "runId": "pilot-text-20261013-024120-colocated",
+  "runtime": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "modelRevision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "name": "vllm",
+    "replicas": 2,
+    "version": "0.30.0"
+  },
+  "scenario": {
+    "kind": "isolated-text-calibration",
+    "name": "pilot-chat-calibration",
+    "sha256": "ee780439ca1f43e8f056f0036a700d3c1d66322c99c2e344aa7b386b41fd6c7f"
+  },
+  "schemaVersion": 1,
+  "status": "partial",
+  "telemetry": {
+    "eppQueueMax": 0.0,
+    "gpuMemoryMaxMiBByNode": {
+      "kip-gpu-1": 21013.0,
+      "kip-gpu-2": 21012.0
+    },
+    "gpuPowerAverageWattsByNode": {
+      "kip-gpu-1": 180.203062,
+      "kip-gpu-2": 195.383938
+    },
+    "gpuUtilizationRatioByNode": {
+      "kip-gpu-1": 0.5,
+      "kip-gpu-2": 0.489375
+    },
+    "runtimeWaitingMax": 0.0
+  },
+  "window": {
+    "costWindow": "2026-10-13T02:41:00Z,2026-10-13T02:45:00Z",
+    "endedAtUtc": "2026-10-13T02:44:18.093870Z",
+    "startedAtUtc": "2026-10-13T02:41:11.906630Z"
+  },
+  "workload": {
+    "contract": "pilot-v1",
+    "rootSeed": 42,
+    "sha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+  }
+}

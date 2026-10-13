@@ -1,0 +1,102 @@
+# Reviewed flow-control phase: install only after the accepted tenant policy.
+# maxConcurrency=6 is a conservative starting point below vLLM's 8 sequences;
+# the control benchmark will tune it before any SLO claim.
+provider:
+  name: none
+
+router:
+  modelServers:
+    type: vllm
+    protocol: http
+    matchLabels:
+      app.kubernetes.io/instance: kip-qwen25-pilot
+    targetPorts:
+      - number: 8000
+  inferencePool:
+    create: true
+    failureMode: FailClose
+  epp:
+    replicas: 1
+    # Keep the request picker next to the private Gateway and tenant auth on
+    # the control node. Cross-region EPP placement added avoidable RTT before
+    # a request ever reached a model worker.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values: [kip-control]
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+    pluginsConfigFile: kip-pilot-flow-plugins.yaml
+    pluginsCustomConfig:
+      kip-pilot-flow-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        featureGates:
+          - flowControl
+        plugins:
+          - type: approx-prefix-cache-producer
+          - type: prefix-cache-scorer
+          - type: kv-cache-utilization-scorer
+          - type: queue-scorer
+          # Preserve cache/load scoring but avoid deterministic concentration
+          # on one replica when max-score repeatedly favors the same pod.
+          - type: weighted-random-picker
+          - type: round-robin-fairness-policy
+          - type: fcfs-ordering-policy
+          - type: concurrency-detector
+            parameters:
+              maxConcurrency: 6
+              concurrencyMode: requests
+              headroom: 0.0
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: queue-scorer
+                weight: 2
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2
+              - pluginRef: prefix-cache-scorer
+                weight: 3
+              - pluginRef: weighted-random-picker
+        flowControl:
+          maxBytes: 1Gi
+          maxRequests: "200"
+          defaultRequestTTL: 60s
+          saturationDetector:
+            pluginRef: concurrency-detector
+          priorityBands:
+            - priority: 100
+              maxRequests: "60"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            - priority: 0
+              maxRequests: "100"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            - priority: -10
+              maxRequests: "40"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: "2"
+        memory: 4Gi
+      limits:
+        cpu: "8"
+        memory: 8Gi
+
+httpRoute:
+  create: true
+  inferenceGatewayName: kip-inference-gateway
+  requestTimeout: 300s

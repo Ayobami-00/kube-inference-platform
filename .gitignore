@@ -19,6 +19,8 @@ dist/
 *.pem
 credentials/
 secrets/
+.secrets/
+fleet/.work/
 
 # Kubernetes and machine-specific configuration
 kubeconfig

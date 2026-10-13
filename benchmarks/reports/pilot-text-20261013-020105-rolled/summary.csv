@@ -1,0 +1,4 @@
+tenant,class,completed,ttftP50Ms,ttftP95Ms,ttftP99Ms,tpotP95Ms,e2eP95Ms,outputTokensPerSecond,successRate,sessionCompletionP95Ms,offeredToCompletedWithinTenMinutesRate,observedProposedSloMet,inputTokens,outputTokens,estimatedTenantUsdByOutputShare
+tenant-a,chat,136,3192.649197,5987.930459,9393.177452,25.38743,9530.670451,155.870791,1.0,65858.546,1.0,False,247001,21120,0.035665
+tenant-b,agentic-style,131,2765.02952,4679.434249,11551.897301,25.867431,11544.011967,111.373063,1.0,92880.742,1.0,False,466858,16456,0.027789
+tenant-c,batch,100,5285.092318,38841.102538,47783.3263,22.015993,46297.75894,220.487472,1.0,45939.384,1.0,True,240394,63550,0.107316

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "name": "pilot-v1",
+  "rootSeed": 42,
+  "tenants": ["tenant-a", "tenant-b", "tenant-c"],
+  "nominalTenantShares": {"tenant-a": 0.45, "tenant-b": 0.45, "tenant-c": 0.1},
+  "contextInputTokenCap": 6144,
+  "sharedPrefixFraction": 0.3,
+  "textMix": {"chat": 0.5, "agentic-style": 0.3, "batch": 0.2},
+  "voiceMix": {"chat": 0.4, "agentic-style": 0.3, "batch": 0.2, "voice": 0.1},
+  "classes": {
+    "chat": {
+      "arrival": "poisson",
+      "turns": [2, 6],
+      "inputTokens": [128, 1024],
+      "outputTokens": [64, 256],
+      "thinkTimeMs": [1000, 10000],
+      "slo": {"ttftP95Ms": 1500, "tpotP95Ms": 100, "successRateMin": 0.99}
+    },
+    "agentic-style": {
+      "arrival": "poisson",
+      "turns": [4, 8],
+      "inputTokens": [512, 2048],
+      "outputTokens": [64, 512],
+      "thinkTimeMs": [2000, 10000],
+      "slo": {"ttftP95Ms": 2000, "taskP95Ms": 90000, "successRateMin": 0.98}
+    },
+    "batch": {
+      "arrival": "scheduled-burst",
+      "turns": [1, 1],
+      "inputTokens": [1024, 4096],
+      "outputTokens": [256, 1024],
+      "thinkTimeMs": [0, 0],
+      "slo": {"withinMs": 600000, "withinRateMin": 0.95, "successRateMin": 0.99}
+    },
+    "voice": {
+      "arrival": "poisson",
+      "turns": [2, 5],
+      "utteranceDurationMs": [2000, 8000],
+      "inputTokens": [256, 1024],
+      "outputTokens": [32, 128],
+      "thinkTimeMs": [500, 3000],
+      "interruptionFraction": 0.2,
+      "slo": {
+        "firstPlayableAudioP95Ms": 2500,
+        "interruptionStopP95Ms": 500,
+        "successRateMin": 0.99
+      }
+    }
+  }
+}

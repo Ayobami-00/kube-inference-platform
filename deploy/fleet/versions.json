@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "status": "artifact-locked-target-unvalidated",
+  "base": {
+    "kubernetes": "1.36.4",
+    "containerd": "2.3.4",
+    "cilium": "1.20.1",
+    "gpuOperator": "v26.7.0"
+  },
+  "gpu": {
+    "driverMode": "preinstalled",
+    "driverVersion": "580.178.04",
+    "driverMajorMinimum": 580,
+    "driverMajorMaximumExclusive": 581,
+    "cudaRuntime": "13.0"
+  },
+  "inference": {
+    "vllmVersion": "v0.30.0",
+    "vllmLinuxAmd64Image": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40",
+    "llmdVersion": "v0.10.0",
+    "eppLinuxAmd64Image": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "routerGatewayChart": "oci://ghcr.io/llm-d/charts/llm-d-router-gateway",
+    "routerGatewayChartVersion": "v0.10.0",
+    "routerGatewayChartDigest": "sha256:20b1c145c78f57ceb48ef9ca6e32fa134263b1e6cbebacb7eadfc9f84f0d9601"
+  },
+  "gateway": {
+    "gatewayApiVersion": "v1.5.1",
+    "gatewayApiStandardManifestSha256": "751002b3b91a87f7ae3bd2517c79a47a8d7ed6702901808a1cf9bd97d284f9b8",
+    "inferenceExtensionVersion": "v1.5.0",
+    "inferenceExtensionManifestSha256": "cd7cc63149943627f92d401991886a631d938de28edb416312c443a1b7f42ded",
+    "envoyGatewayVersion": "v1.8.1",
+    "envoyGatewayLinuxAmd64Image": "docker.io/envoyproxy/gateway:v1.8.1@sha256:b055b426588bfe1599eba0e3824711a5f8d8d307d9509302bd28f44dc2ab7adf",
+    "envoyProxyLinuxAmd64Image": "docker.io/envoyproxy/envoy:distroless-v1.38.1@sha256:91be2297e89907c05cb02ce614a68a85d4bfcbb9d5f168daf3dbb08e0ec80dc8",
+    "envoyRateLimitLinuxAmd64Image": "docker.io/envoyproxy/ratelimit:ff287602@sha256:266d0ab0e8298bb62f4e89d16e6cd1cb8e36a4a0254eadc056423d09aad90c4c",
+    "envoyGatewayChartDigest": "sha256:f46b2f38b695279fce81dced26d97724c3445fcccb0488aaa28ec5ef963a6181",
+    "envoyGatewayCrdsChartDigest": "sha256:8ac15708adafa6660f77539b33bf215144ea29352c9a17127c1770d96eeaa661",
+    "envoyAiGatewayVersion": "v0.7.0",
+    "envoyAiGatewayControllerLinuxAmd64Image": "docker.io/envoyproxy/ai-gateway-controller:v0.7.0@sha256:4241df1b1fa9a5babf90b58c1f9e03795e1ad3108ec9c835a77f5eacd612590e",
+    "envoyAiGatewayExtprocLinuxAmd64Image": "docker.io/envoyproxy/ai-gateway-extproc:v0.7.0@sha256:d0481dc46385a1e1a57ecb9b41c8fabf164497fdf6a9e60a7cc022c99e005587",
+    "envoyAiGatewayChartDigest": "sha256:365548d10ba81b21ef23c6968d5e3ff3bc212c23a307fcce970426c30ea86433",
+    "envoyAiGatewayCrdsChartDigest": "sha256:d594c6d5e9d40b61f94c70fffed59c5e3dded8bc19fe0d5cdf45980743b1a35f"
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "aiperfVersion": "0.12.0",
+  "cohorts": [
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-a WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "baf4c097df2c97022157b92396a70ff53be4d2d0d44daa9b8067e130afa8fc8d",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 3914868175052823338,
+      "sessions": 2,
+      "tenant": "tenant-a",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=agentic-style TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=agentic-style TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-a WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "9b306a2963bb786e038211db29373e60a5178a76347e8beeaacab0a4f9901475",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 5633289753809313883,
+      "sessions": 2,
+      "tenant": "tenant-a",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "four-burst-scaled-v2",
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=batch TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=batch TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-a WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "b7b218164aea74aa87ccd0dbc66bfa74ea3282f1bd006fe18569d50d3862903d",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 1892876406289994622,
+      "sessions": 2,
+      "tenant": "tenant-a",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=chat TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=chat TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-b WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "06c28ffde48455a98e1e8dee8ae3f0d5c2ad3579c284b32b81e4d1ad639e837d",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 12217629209439784454,
+      "sessions": 2,
+      "tenant": "tenant-b",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-b WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "78f259c9dfffad8970903bfc7aca654d3904a58d959692f1446997d636a6a482",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 16842991476607539761,
+      "sessions": 2,
+      "tenant": "tenant-b",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "four-burst-scaled-v2",
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=batch TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=batch TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-b WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "430bc839becab066cb99249884cf677769161f461f3b8b31496ae7aa46173c19",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 13427693263578203658,
+      "sessions": 2,
+      "tenant": "tenant-b",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=chat TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=chat TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-c WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "1bff2b2c6cbd39eeed04fba00f29f807337f73f0ddf6ebaa3880aa15c66bbf3e",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 3437397329272668189,
+      "sessions": 2,
+      "tenant": "tenant-c",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=agentic-style TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=agentic-style TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-c WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "9798809404c010c57996e4f4ee534401b4321eae31d13c725f065b08c5febe73",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 3984262727934915223,
+      "sessions": 2,
+      "tenant": "tenant-c",
+      "trial": 9
+    },
+    {
+      "arrivalSchedule": "four-burst-scaled-v2",
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=9 SESSIONS=2 RATE=0.1",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=9 RUN_ID=pilot-text-20261013-021640-matrix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-021640-matrix TENANT=tenant-c WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "032cbb9429a19d79caabb22156ec3482a9afa1b2d3855c3ea61fe4e0c9f64b07",
+      "offeredSessionsPerSecond": 0.1,
+      "seed": 17697993380335201141,
+      "sessions": 2,
+      "tenant": "tenant-c",
+      "trial": 9
+    }
+  ],
+  "components": {
+    "cilium": "1.20.1",
+    "containerd": "2.3.4",
+    "envoyAiGateway": "v0.7.0",
+    "envoyGateway": "v1.8.1",
+    "eppImage": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "gpuOperator": "v26.7.0",
+    "kubernetes": "1.36.4",
+    "llmd": "v0.10.0",
+    "nvidiaDriver": "580.178.04",
+    "vllmImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40"
+  },
+  "costRateSource": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+  "costWindow": "2026-10-13T02:16:00Z,2026-10-13T02:19:00Z",
+  "gitRevision": "not-recorded-on-git-free-control-checkout",
+  "modelManifestSha256": "8e369d667ed8ff4690dff8845e2f8059dfde949e5c531b3dc3b04356758e555f",
+  "reportCommand": "make campaign-report RUN_ID=pilot-text-20261013-021640-matrix",
+  "routerHelmRevisionAtReport": 8,
+  "routerValuesSha256": "e0f286ff950877aedea44081f5389229fa392817f1ea4ee234487a5eeb0d5595",
+  "runId": "pilot-text-20261013-021640-matrix",
+  "scenario": {
+    "kind": "mixed-text-pilot-trial",
+    "name": "pilot-nine-cohort-smoke",
+    "sha256": "746215f665d80376c9c44475f402dddba87246ac5114c43189030ec05e6a3207"
+  },
+  "schemaVersion": 1,
+  "versionsLockSha256": "1e9cd50a49745158fea1b6293161f6e3dd3966c3b36f8c49475762238195ddf2",
+  "workloadContractSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

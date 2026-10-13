@@ -1,0 +1,26 @@
+# Low-concurrency per-cohort AIPerf client for nine concurrent tenant/class
+# combinations. Dataset and credential remain ignored private inputs.
+schemaVersion: "2.0"
+randomSeed: 42
+benchmark:
+  model: qwen2.5-7b-instruct
+  endpoint:
+    url: ${KIP_PILOT_GATEWAY_URL}/v1/chat/completions
+    type: chat
+    streaming: true
+    timeout: 180.0
+    api_key: ${KIP_PILOT_TOKEN}
+    connectionReuse: sticky-user-sessions
+  dataset:
+    type: file
+    path: ${KIP_PILOT_DATASET}
+    format: ${KIP_PILOT_DATASET_FORMAT}
+    sampling: sequential
+  phases:
+    type: fixed_schedule
+    autoOffset: true
+    concurrency: 4
+  artifacts:
+    dir: ${KIP_PILOT_ARTIFACTS}
+    summary: [json]
+    records: [jsonl]

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "pilot-chat-calibration",
+  "kind": "isolated-text-calibration",
+  "cohorts": [
+    {"tenant": "tenant-c", "class": "chat"}
+  ]
+}

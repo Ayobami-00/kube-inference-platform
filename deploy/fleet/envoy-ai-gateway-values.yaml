@@ -1,0 +1,12 @@
+# The chart stays private; no data-plane Service is exposed by this controller.
+# Image digests are Linux/amd64 manifests resolved from v0.7.0 official tags.
+controller:
+  image:
+    repository: docker.io/envoyproxy/ai-gateway-controller
+    tag: v0.7.0@sha256:4241df1b1fa9a5babf90b58c1f9e03795e1ad3108ec9c835a77f5eacd612590e
+  service:
+    type: ClusterIP
+extProc:
+  image:
+    repository: docker.io/envoyproxy/ai-gateway-extproc
+    tag: v0.7.0@sha256:d0481dc46385a1e1a57ecb9b41c8fabf164497fdf6a9e60a7cc022c99e005587

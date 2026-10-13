@@ -1,0 +1,2 @@
+tenant,class,completed,ttftP50Ms,ttftP95Ms,ttftP99Ms,tpotP95Ms,e2eP95Ms,outputTokensPerSecond,sentToGatewayP95Ms,gatewayToEppDispatchP95Ms,gatewayDurationP95Ms,successRate,sessionCompletionP95Ms,offeredToCompletedWithinTenMinutesRate,observedProposedSloMet,inputTokens,outputTokens,estimatedTenantUsdByOutputShare
+tenant-a,chat,11,1224.892518,1822.831576,1976.961564,16.848462,5130.1468,36.679622,394.871,557.823,4715.0,1.0,29512.512,1.0,False,15681,1686,0.06831

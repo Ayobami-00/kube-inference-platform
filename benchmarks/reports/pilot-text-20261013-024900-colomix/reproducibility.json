@@ -1,0 +1,78 @@
+{
+  "aiperfVersion": "0.12.0",
+  "cohorts": [
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=8 SESSIONS=32 RATE=0.4",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=8 RUN_ID=pilot-text-20261013-024900-colomix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-024900-colomix TENANT=tenant-a WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "7fed14982be13fe02b08c8c864fb69cdae4e77f0d42a965fbfca5afc0ca4facf",
+      "offeredSessionsPerSecond": 0.4,
+      "seed": 12938585344667100058,
+      "sessions": 32,
+      "tenant": "tenant-a",
+      "trial": 8
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=4 SESSIONS=20 RATE=0.3",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=4 RUN_ID=pilot-text-20261013-024900-colomix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-024900-colomix TENANT=tenant-b WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "324cfbba33856ed979ede8cdc6b6013b5dfbf0ebf2ea06fdad06158b7f1abae5",
+      "offeredSessionsPerSecond": 0.3,
+      "seed": 11396523604682415239,
+      "sessions": 20,
+      "tenant": "tenant-b",
+      "trial": 4
+    },
+    {
+      "arrivalSchedule": "four-burst-scaled-v2",
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=4 SESSIONS=100 RATE=0.4",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=4 RUN_ID=pilot-text-20261013-024900-colomix",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-024900-colomix TENANT=tenant-c WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "48a30fb5f676d1f1108b120cbcef00ad0b85dcb68eccb91abeb7f05b232f5b50",
+      "offeredSessionsPerSecond": 0.4,
+      "seed": 1262576491993358607,
+      "sessions": 100,
+      "tenant": "tenant-c",
+      "trial": 4
+    }
+  ],
+  "components": {
+    "cilium": "1.20.1",
+    "containerd": "2.3.4",
+    "envoyAiGateway": "v0.7.0",
+    "envoyGateway": "v1.8.1",
+    "eppImage": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "gpuOperator": "v26.7.0",
+    "kubernetes": "1.36.4",
+    "llmd": "v0.10.0",
+    "nvidiaDriver": "580.178.04",
+    "vllmImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40"
+  },
+  "costRateSource": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+  "costWindow": "2026-10-13T02:48:00Z,2026-10-13T02:54:00Z",
+  "gitRevision": "not-recorded-on-git-free-control-checkout",
+  "modelManifestSha256": "8e369d667ed8ff4690dff8845e2f8059dfde949e5c531b3dc3b04356758e555f",
+  "reportCommand": "make campaign-report RUN_ID=pilot-text-20261013-024900-colomix SCENARIO=pilot-three-tenant-text",
+  "routerHelmRevisionAtReport": 11,
+  "routerValuesSha256": "f3812c54f98aa410415c6a55559d42801158315fc9923057d4fb0ec166e952d7",
+  "runId": "pilot-text-20261013-024900-colomix",
+  "scenario": {
+    "kind": "mixed-text-pilot-trial",
+    "name": "pilot-three-tenant-text",
+    "sha256": "6f0f3cf48e4f8314e560ffeef5d8915734a9460f095fec44283f5bcf838d2efa"
+  },
+  "schemaVersion": 1,
+  "versionsLockSha256": "1e9cd50a49745158fea1b6293161f6e3dd3966c3b36f8c49475762238195ddf2",
+  "workloadContractSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

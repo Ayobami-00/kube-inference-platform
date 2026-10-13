@@ -1,0 +1,237 @@
+{
+  "cohorts": [
+    {
+      "class": "chat",
+      "counts": {
+        "admitted": 17,
+        "completed": 17,
+        "dispatched": 17,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 17,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 17
+      },
+      "dataset": {
+        "datasetSha256": "f238c577663ba526ffcdbc8d9bab44c1dfa49d4a9b73777b034c3e172e1f2f71",
+        "offeredSessionsPerSecond": 0.8,
+        "plannedTurns": 17,
+        "seed": 17534024539920371490,
+        "sessions": 4,
+        "trial": 6
+      },
+      "e2eMs": {
+        "p50": 4460.899153,
+        "p95": 5600.785875,
+        "p99": 6341.648994
+      },
+      "endedAtUtc": "2026-10-13T01:22:28.564261Z",
+      "estimatedTenantUsdByOutputShare": 0.022043,
+      "inputTokens": 29607,
+      "observedTtftTargetMet": false,
+      "offeredToSentP95Ms": 2.475,
+      "outputTokens": 3143,
+      "outputTokensPerSecond": 53.755069,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "tpotP95Ms": 100,
+        "ttftP95Ms": 1500
+      },
+      "requestThroughputPerSecond": 0.290753,
+      "sampleThresholdMet": false,
+      "startedAtUtc": "2026-10-13T01:21:30.095356Z",
+      "tenant": "tenant-a",
+      "tpotMs": {
+        "p50": 16.317797,
+        "p95": 21.916254,
+        "p99": 26.867935
+      },
+      "ttftMs": {
+        "p50": 1164.666886,
+        "p95": 1821.45889,
+        "p99": 1821.619375
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 8,
+        "kip-gpu-2": 9
+      }
+    },
+    {
+      "class": "agentic-style",
+      "counts": {
+        "admitted": 25,
+        "completed": 25,
+        "dispatched": 25,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 25,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 25
+      },
+      "dataset": {
+        "datasetSha256": "94016b6708f4c1ec90233579ddb8ce97eaa7a41668306a61f51b4035fe87177e",
+        "offeredSessionsPerSecond": 0.6,
+        "plannedTurns": 25,
+        "seed": 2445234250443827678,
+        "sessions": 4,
+        "trial": 2
+      },
+      "e2eMs": {
+        "p50": 2719.269723,
+        "p95": 10303.798015,
+        "p99": 11330.10098
+      },
+      "endedAtUtc": "2026-10-13T01:22:38.014418Z",
+      "estimatedTenantUsdByOutputShare": 0.028278,
+      "inputTokens": 88026,
+      "observedTtftTargetMet": true,
+      "offeredToSentP95Ms": 2.949,
+      "outputTokens": 4032,
+      "outputTokensPerSecond": 59.091491,
+      "proposedSlo": {
+        "successRateMin": 0.98,
+        "taskP95Ms": 90000,
+        "ttftP95Ms": 2000
+      },
+      "requestThroughputPerSecond": 0.366391,
+      "sampleThresholdMet": false,
+      "startedAtUtc": "2026-10-13T01:21:29.781244Z",
+      "tenant": "tenant-b",
+      "tpotMs": {
+        "p50": 16.510348,
+        "p95": 19.110338,
+        "p99": 20.555099
+      },
+      "ttftMs": {
+        "p50": 1556.524689,
+        "p95": 1855.835764,
+        "p99": 1899.110355
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 17,
+        "kip-gpu-2": 8
+      }
+    },
+    {
+      "class": "batch",
+      "counts": {
+        "admitted": 4,
+        "completed": 4,
+        "dispatched": 4,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 4,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 4
+      },
+      "dataset": {
+        "datasetSha256": "4df7631bfedff6825b6a81c5f0c8772ceac2aaf9ec31339aa910f6935f72e539",
+        "offeredSessionsPerSecond": 1.0,
+        "plannedTurns": 4,
+        "seed": 2871005365363742962,
+        "sessions": 4,
+        "trial": 2
+      },
+      "e2eMs": {
+        "p50": 13189.340104,
+        "p95": 18483.536706,
+        "p99": 18824.611152
+      },
+      "endedAtUtc": "2026-10-13T01:21:50.630433Z",
+      "estimatedTenantUsdByOutputShare": 0.017989,
+      "inputTokens": 9518,
+      "observedTtftTargetMet": null,
+      "offeredToSentP95Ms": 2.6350000000000002,
+      "outputTokens": 2565,
+      "outputTokensPerSecond": 128.72894,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "withinMs": 600000,
+        "withinRateMin": 0.95
+      },
+      "requestThroughputPerSecond": 0.200747,
+      "sampleThresholdMet": false,
+      "startedAtUtc": "2026-10-13T01:21:30.704844Z",
+      "tenant": "tenant-c",
+      "tpotMs": {
+        "p50": 18.018919,
+        "p95": 18.371898,
+        "p99": 18.380185
+      },
+      "ttftMs": {
+        "p50": 2162.279027,
+        "p95": 2440.160706,
+        "p99": 2444.666861
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 4
+      }
+    }
+  ],
+  "cost": {
+    "allocatedUsd": 0.06831,
+    "auditUsd": 0.068247,
+    "basis": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+    "currency": "USD",
+    "fleetHourlyUsd": 2.047407407407407,
+    "nodeHourlyUsd": {
+      "kip-control": 0.6814814814814815,
+      "kip-gpu-1": 0.6222222222222222,
+      "kip-gpu-2": 0.7437037037037036
+    },
+    "rateObservedAtUtc": "2026-10-13T01:20:58.046142Z",
+    "reconciliationPercent": 0.0923,
+    "tenantAttribution": "illustrative output-token share of allocated infrastructure cost; not invoice or measured per-tenant resource usage"
+  },
+  "dataQuality": {
+    "status": "partial",
+    "warnings": [
+      "Small mixed smoke only: fewer than 100 completed samples per class/trial; nominal SLOs are not accepted.",
+      "No confidence intervals or three independent trials in this interim report.",
+      "No voice pipeline, noisy-tenant stress, worker-failure, or clean-rebuild evidence yet.",
+      "Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.",
+      "Tenant cost is an output-token-share estimate, not bill-reconciling attribution."
+    ]
+  },
+  "grafanaUrl": "http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T01%3A21%3A00.000000Z&to=2026-10-13T01%3A23%3A00.000000Z&timezone=utc&var-cluster=kip-pilot&var-model=qwen2.5-7b-instruct",
+  "kind": "mixed-text-smoke",
+  "runId": "pilot-text-20261013-012123",
+  "runtime": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "modelRevision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "name": "vllm",
+    "replicas": 2,
+    "version": "0.30.0"
+  },
+  "schemaVersion": 1,
+  "status": "partial",
+  "telemetry": {
+    "eppQueueMax": 0.0,
+    "gpuMemoryMaxMiBByNode": {
+      "kip-gpu-1": 21013.0,
+      "kip-gpu-2": 21012.0
+    },
+    "gpuPowerAverageWattsByNode": {
+      "kip-gpu-1": 105.436125,
+      "kip-gpu-2": 153.96525
+    },
+    "gpuUtilizationRatioByNode": {
+      "kip-gpu-1": 0.125,
+      "kip-gpu-2": 0.375
+    },
+    "runtimeWaitingMax": 0.0
+  },
+  "window": {
+    "costWindow": "2026-10-13T01:21:00Z,2026-10-13T01:23:00Z",
+    "endedAtUtc": "2026-10-13T01:22:38.014418Z",
+    "startedAtUtc": "2026-10-13T01:21:29.781244Z"
+  },
+  "workload": {
+    "contract": "pilot-v1",
+    "rootSeed": 42,
+    "sha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+  }
+}

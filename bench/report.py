@@ -943,7 +943,7 @@ def _render_html(data: dict[str, Any], summary: dict[str, Any]) -> str:
   <section><h2>Cost provenance</h2>
     <p>{html.escape(profile["provider"])} · {html.escape(profile["machineType"])} · {html.escape(profile["region"])}</p>
     <p>Whole-node USD/hour: <strong>{profile["nodeHourlyRateUsd"]:.6f}</strong>; effective {html.escape(profile["effectiveFrom"])}; power included.</p>
-    <p><a href="{html.escape(profile["source"], quote=True)}">{("User-confirmed billing portal" if profile.get("sourceType") == "user-confirmed-billing" else "Published rate source")}</a> · profile SHA-256 <code>{html.escape(profile["sha256"])}</code></p>
+    <p><a href="{html.escape(profile["source"], quote=True)}">{("User-confirmed billing portal" if profile.get("sourceType") == "user-confirmed-billing" else "Provider live instance rate" if profile.get("sourceType") == "provider-live-rate" else "Published rate source")}</a> · profile SHA-256 <code>{html.escape(profile["sha256"])}</code></p>
     <p class="muted">Costs are transparent rate-based estimates, not a provider invoice. Allocated cost includes idle node time; usage cost is an efficiency view. Per-trial charges use the reviewed node hourly rate times exact elapsed time, attributed by OpenCost's model share; usage and input/output splits retain OpenCost's measured proportions. This avoids treating coarse short-window OpenCost totals as exact elapsed billing.</p>
   </section>
   <section><h2>Reproducibility</h2>

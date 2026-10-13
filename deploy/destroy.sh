@@ -214,7 +214,17 @@ kip_destroy_resource_is_owned() {
 }
 
 kip_destroy_namespace_contents_are_owned() {
-    local allowed_releases=${2:-} namespace=$1 output resource resources
+    local allowed_releases=${2:-} namespace=$1 operator_pods='[]' output resource resources
+
+    if [ "$namespace" = gpu-operator ] && [ "$allowed_releases" = gpu-operator ]; then
+        operator_pods=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            -n gpu-operator get pods -l app.kubernetes.io/component=gpu-operator \
+            -o json 2>/dev/null | kip_exec jq -c '
+                [.items[]? | select(.metadata.labels["app.kubernetes.io/instance"]
+                    == "gpu-operator") | .metadata.name]
+            ') || return 1
+    fi
 
     resources=$(kip_run_privileged kubectl \
         --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
@@ -226,7 +236,8 @@ kip_destroy_namespace_contents_are_owned() {
             --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
             -n "$namespace" get "$resource" -o json 2>/dev/null) || return 1
         printf '%s' "$output" | kip_exec jq -e \
-            --arg namespace "$namespace" --arg releases "$allowed_releases" '
+            --arg namespace "$namespace" --arg releases "$allowed_releases" \
+            --argjson operatorPods "$operator_pods" '
             def allowed_releases: ($releases | split(" ") | map(select(length > 0)));
             def kip_owned:
                 .metadata.labels["app.kubernetes.io/managed-by"]
@@ -241,6 +252,28 @@ kip_destroy_namespace_contents_are_owned() {
                 and (.metadata.labels.owner // "") == "helm"
                 and ((.metadata.labels.name // "") as $release
                     | (allowed_releases | index($release)) != null);
+            def monitoring_generated:
+                $namespace == "kip-observability"
+                and (allowed_releases | index("kip-monitoring")) != null
+                and (
+                    (.kind == "PersistentVolumeClaim"
+                        and ((.metadata.name == "alertmanager-kip-monitoring-alertmanager-db-alertmanager-kip-monitoring-alertmanager-0"
+                                and .metadata.labels["kube-inference-platform.io/volume"] == "alertmanager"
+                                and .spec.volumeName == "kip-alertmanager")
+                            or (.metadata.name == "prometheus-kip-monitoring-prometheus-db-prometheus-kip-monitoring-prometheus-0"
+                                and .metadata.labels["kube-inference-platform.io/volume"] == "prometheus"
+                                and .spec.volumeName == "kip-prometheus"))
+                        and .metadata.labels["app.kubernetes.io/managed-by"] == "prometheus-operator")
+                    or (.kind == "Secret" and .metadata.name == "kip-monitoring-admission"
+                        and .type == "Opaque" and (.data | keys) == ["ca", "cert", "key"])
+                );
+            def gpu_operator_generated:
+                $namespace == "gpu-operator"
+                and (allowed_releases | index("gpu-operator")) != null
+                and .kind == "Lease"
+                and (.metadata.name | test("^[0-9]+\\.nvidia\\.com$"))
+                and (((.spec.holderIdentity // "") | split("_")[0]) as $holder
+                    | ($operatorPods | index($holder)) != null);
             def generated_child:
                 ((.metadata.ownerReferences // []) | length) > 0
                 or .kind == "Event"
@@ -251,6 +284,7 @@ kip_destroy_namespace_contents_are_owned() {
                 or ((.metadata.labels["endpointslice.kubernetes.io/managed-by"] // "")
                     | length) > 0;
             all(.items[]?; kip_owned or exact_helm_release or exact_helm_record
+                or monitoring_generated or gpu_operator_generated
                 or generated_child)
         ' >/dev/null || return 1
     done <<EOF
@@ -327,14 +361,18 @@ kip_destroy_monitoring_crds_are_owned() {
             get "$crd" --all-namespaces -o json 2>/dev/null) || return 1
         printf '%s' "$output" | kip_exec jq -e \
             --arg namespace "$KIP_OBSERVABILITY_NAMESPACE" \
-            --arg release "$KIP_MONITORING_RELEASE" '
+            --arg monitoring_release "$KIP_MONITORING_RELEASE" \
+            --arg opencost_release "$KIP_OPENCOST_RELEASE" '
             all(.items[]?;
                 .metadata.namespace == $namespace
                 and (
                     .metadata.labels["app.kubernetes.io/managed-by"]
                         == "kube-inference-platform"
                     or (
-                        .metadata.annotations["meta.helm.sh/release-name"] == $release
+                        (.metadata.annotations["meta.helm.sh/release-name"]
+                            == $monitoring_release
+                            or .metadata.annotations["meta.helm.sh/release-name"]
+                                == $opencost_release)
                         and .metadata.annotations["meta.helm.sh/release-namespace"]
                             == $namespace
                     )
@@ -623,7 +661,7 @@ kip_destroy_runtime_is_owned() {
 }
 
 kip_destroy_cluster_scope_is_safe() {
-    local namespaces persistent_volumes workloads
+    local cilium_namespace_resources namespaces persistent_volumes workloads
 
     namespaces=$(kip_run_privileged kubectl \
         --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
@@ -631,12 +669,40 @@ kip_destroy_cluster_scope_is_safe() {
     printf '%s' "$namespaces" | kip_exec jq -e \
         --arg benchmark "$KIP_BENCHMARK_NAMESPACE" \
         --arg observability "$KIP_OBSERVABILITY_NAMESPACE" \
-        --arg runtime "$KIP_RUNTIME_NAMESPACE" '
+        --arg runtime "$KIP_RUNTIME_NAMESPACE" \
+        --arg cilium_version "$KIP_CILIUM_VERSION" '
         all(.items[]?; .metadata.name as $name
-            | ["default", "kube-system", "kube-public", "kube-node-lease",
-                "gpu-operator", $benchmark, $observability, $runtime]
-            | index($name) != null)
+            | if $name == "cilium-secrets" then
+                .metadata.labels["app.kubernetes.io/managed-by"] == "Helm"
+                and .metadata.labels["app.kubernetes.io/part-of"] == "cilium"
+                and .metadata.labels["helm.sh/chart"] == ("cilium-" + $cilium_version)
+                and .metadata.annotations["meta.helm.sh/release-name"] == "cilium"
+                and .metadata.annotations["meta.helm.sh/release-namespace"] == "kube-system"
+              else
+                (["default", "kube-system", "kube-public", "kube-node-lease",
+                    "gpu-operator", $benchmark, $observability, $runtime]
+                    | index($name) != null)
+              end)
     ' >/dev/null || return 1
+
+    if printf '%s' "$namespaces" | kip_exec jq -e \
+        '[.items[]? | select(.metadata.name == "cilium-secrets")] | length == 1' \
+        >/dev/null; then
+        cilium_namespace_resources=$(kip_run_privileged kubectl \
+            --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \
+            get all,secret,configmap,serviceaccount,role,rolebinding,pvc,ingress \
+            -n cilium-secrets -o json 2>/dev/null) || return 1
+        printf '%s' "$cilium_namespace_resources" | kip_exec jq -e '
+            all(.items[]?; .kind as $kind | .metadata.name as $name
+                | ($kind == "ConfigMap" and $name == "kube-root-ca.crt")
+                or ($kind == "ServiceAccount" and $name == "default")
+                or ($kind == "Role" and $name == "cilium-operator-tlsinterception-secrets")
+                or ($kind == "Role" and $name == "cilium-tlsinterception-secrets")
+                or ($kind == "RoleBinding"
+                    and $name == "cilium-operator-tlsinterception-secrets")
+                or ($kind == "RoleBinding" and $name == "cilium-tlsinterception-secrets"))
+        ' >/dev/null || return 1
+    fi
 
     workloads=$(kip_run_privileged kubectl \
         --kubeconfig "$KIP_ETC_ROOT/kubernetes/admin.conf" \

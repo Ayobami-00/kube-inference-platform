@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "llmdRouterVersion": "v0.10.0",
+  "inferenceObjectiveManifestUrl": "https://github.com/llm-d/llm-d-router/releases/download/v0.10.0/manifests.yaml",
+  "inferenceObjectiveManifestSha256": "488c0f48f4d41067d2319e20761bae1e531cfcfc8c73ba979067365302ec1df0",
+  "tenantAuthLinuxAmd64Image": "docker.io/library/python:3.12.15-slim-bookworm@sha256:2ed6491b93cd49272ee6de2b5a38440c3448360322c089fc23e370722d74179d",
+  "preTenantRouterValuesSha256": "871c210a7ab76455d925ebd6081cb543c40bd01ddd93c86b38963a541477dbf2",
+  "preWeightedPickerValuesSha256": "89f23e13b2a218da0795bd06936ae66e609d68ae0a12a00679953f907539e491",
+  "preControlPlanePlacementValuesSha256": "e0f286ff950877aedea44081f5389229fa392817f1ea4ee234487a5eeb0d5595",
+  "failedUntoleratedPlacementValuesSha256": "27b53da1aa41bb61848bdf942130d528ef911be59d8b442a981c07af077849d0",
+  "preTenantControlPlanePlacementValuesSha256": "5c838f1ae26f6c39b1310fdeddfdde558fcb3c0bd8437b014e42b2a43882b26d"
+}

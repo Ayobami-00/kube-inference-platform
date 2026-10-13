@@ -1,0 +1,150 @@
+{
+  "cohorts": [
+    {
+      "class": "chat",
+      "counts": {
+        "admitted": 11,
+        "completed": 11,
+        "dispatched": 11,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 11,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 11
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "cf04882d021fceaa70db71688f6897d144ed1a48ad4ee7348b5301d844fdf0b8",
+        "offeredSessionsPerSecond": 0.2,
+        "plannedTurns": 11,
+        "seed": 1476795532089381294,
+        "sessions": 2,
+        "trial": 10
+      },
+      "e2eMs": {
+        "p50": 3363.317601,
+        "p95": 4406.443376,
+        "p99": 4450.716919
+      },
+      "endedAtUtc": "2026-10-13T02:26:30.485389Z",
+      "estimatedTenantUsdByOutputShare": 0.06831,
+      "gatewayDurationP95Ms": 3802.0,
+      "gatewayToEppDispatchP95Ms": 559.3,
+      "inputTokens": 21678,
+      "observedSloChecks": {
+        "success": true,
+        "tpot": true,
+        "ttft": true
+      },
+      "observedTtftTargetMet": true,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 3.626,
+      "outputTokens": 1577,
+      "outputTokensPerSecond": 35.128858,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "tpotP95Ms": 100,
+        "ttftP95Ms": 1500
+      },
+      "requestThroughputPerSecond": 0.245033,
+      "sampleThresholdMet": false,
+      "sentToGatewayP95Ms": 395.32,
+      "sessionCompletionP95Ms": 34857.578,
+      "startedAtUtc": "2026-10-13T02:25:45.593522Z",
+      "successRate": 1.0,
+      "tenant": "tenant-a",
+      "tpotMs": {
+        "p50": 16.030584,
+        "p95": 16.802662,
+        "p99": 16.884098
+      },
+      "ttftMs": {
+        "p50": 1009.185826,
+        "p95": 1211.662909,
+        "p99": 1251.485458
+      },
+      "workerDispatches": {
+        "kip-gpu-2": 11
+      }
+    }
+  ],
+  "cost": {
+    "allocatedUsd": 0.06831,
+    "auditUsd": 0.068247,
+    "basis": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+    "currency": "USD",
+    "fleetHourlyUsd": 2.047407407407407,
+    "nodeHourlyUsd": {
+      "kip-control": 0.6814814814814815,
+      "kip-gpu-1": 0.6222222222222222,
+      "kip-gpu-2": 0.7437037037037036
+    },
+    "rateObservedAtUtc": "2026-10-13T02:28:12.674786Z",
+    "reconciliationPercent": 0.0923,
+    "tenantAttribution": "illustrative output-token share of allocated infrastructure cost; not invoice or measured per-tenant resource usage"
+  },
+  "dataQuality": {
+    "status": "partial",
+    "warnings": [
+      "At least one class has fewer than 100 completed samples in this trial.",
+      "Only one trial per class is present; three independent trials and confidence intervals are required for nominal SLO acceptance.",
+      "This small replica-loss checkpoint does not establish sustained failure tolerance or in-flight request continuity; voice, noisy-tenant stress, and clean rebuild remain untested.",
+      "Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.",
+      "Tenant cost is an output-token-share estimate, not bill-reconciling attribution."
+    ]
+  },
+  "grafanaUrl": "http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T02%3A25%3A00.000000Z&to=2026-10-13T02%3A27%3A00.000000Z&timezone=utc&var-cluster=kip-pilot&var-model=qwen2.5-7b-instruct",
+  "kind": "replica-failure-checkpoint",
+  "observedServingWorkers": [
+    "kip-gpu-2"
+  ],
+  "routing": {
+    "helmRevision": 8,
+    "lastHelmReconcileAtReportUtc": "2026-10-13T02:08:26.024402Z",
+    "picker": "weighted-random-picker",
+    "pickerPodCreatedAtUtc": "2026-10-13T02:00:02.000000Z",
+    "valuesSha256": "e0f286ff950877aedea44081f5389229fa392817f1ea4ee234487a5eeb0d5595"
+  },
+  "runId": "pilot-text-20261013-022534-loss",
+  "runtime": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "modelRevision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "name": "vllm",
+    "replicas": 2,
+    "version": "0.30.0"
+  },
+  "scenario": {
+    "kind": "replica-failure-checkpoint",
+    "name": "pilot-worker-loss-during",
+    "sha256": "3588a132984d18a0718288b7ad9923ecec88c1072075f756cd2477cf3ab7f973"
+  },
+  "schemaVersion": 1,
+  "status": "partial",
+  "telemetry": {
+    "eppQueueMax": 0.0,
+    "gpuMemoryMaxMiBByNode": {
+      "kip-gpu-1": 21013.0,
+      "kip-gpu-2": 21012.0
+    },
+    "gpuPowerAverageWattsByNode": {
+      "kip-gpu-1": 50.139567,
+      "kip-gpu-2": 118.37025
+    },
+    "gpuUtilizationRatioByNode": {
+      "kip-gpu-1": 0.008,
+      "kip-gpu-2": 0.3675
+    },
+    "runtimeWaitingMax": 0.0
+  },
+  "window": {
+    "costWindow": "2026-10-13T02:25:00Z,2026-10-13T02:27:00Z",
+    "endedAtUtc": "2026-10-13T02:26:30.485389Z",
+    "startedAtUtc": "2026-10-13T02:25:45.593522Z"
+  },
+  "workload": {
+    "contract": "pilot-v1",
+    "rootSeed": 42,
+    "sha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+  }
+}

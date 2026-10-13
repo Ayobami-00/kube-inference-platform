@@ -1,0 +1,78 @@
+{
+  "aiperfVersion": "0.12.0",
+  "cohorts": [
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=12 SESSIONS=32 RATE=0.2",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=12 RUN_ID=pilot-text-20261013-082900-lowrate",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-082900-lowrate TENANT=tenant-a WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "a94f09f3de33c4db66f4c5fde0800bca038d2252fa5b1f957a2e427aef170c05",
+      "offeredSessionsPerSecond": 0.2,
+      "seed": 12616622334978845991,
+      "sessions": 32,
+      "tenant": "tenant-a",
+      "trial": 12
+    },
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "agentic-style",
+      "commands": [
+        "make workload-generate TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=5 SESSIONS=20 RATE=0.15",
+        "make campaign-text-replay TENANT=tenant-b WORKLOAD_CLASS=agentic-style TRIAL=5 RUN_ID=pilot-text-20261013-082900-lowrate",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-082900-lowrate TENANT=tenant-b WORKLOAD_CLASS=agentic-style"
+      ],
+      "datasetSha256": "90b4b88ad1e80cc578853de6c257feb3024f32941ecb6ce3f492eba30efa659d",
+      "offeredSessionsPerSecond": 0.15,
+      "seed": 16079560903304582160,
+      "sessions": 20,
+      "tenant": "tenant-b",
+      "trial": 5
+    },
+    {
+      "arrivalSchedule": "four-burst-scaled-v2",
+      "class": "batch",
+      "commands": [
+        "make workload-generate TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=5 SESSIONS=100 RATE=0.2",
+        "make campaign-text-replay TENANT=tenant-c WORKLOAD_CLASS=batch TRIAL=5 RUN_ID=pilot-text-20261013-082900-lowrate",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-082900-lowrate TENANT=tenant-c WORKLOAD_CLASS=batch"
+      ],
+      "datasetSha256": "22572a61c82a10fa3579607e883f436e04b91d23e3034947caab99db6bf943c7",
+      "offeredSessionsPerSecond": 0.2,
+      "seed": 9956077513300546782,
+      "sessions": 100,
+      "tenant": "tenant-c",
+      "trial": 5
+    }
+  ],
+  "components": {
+    "cilium": "1.20.1",
+    "containerd": "2.3.4",
+    "envoyAiGateway": "v0.7.0",
+    "envoyGateway": "v1.8.1",
+    "eppImage": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "gpuOperator": "v26.7.0",
+    "kubernetes": "1.36.4",
+    "llmd": "v0.10.0",
+    "nvidiaDriver": "580.178.04",
+    "vllmImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40"
+  },
+  "costRateSource": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+  "costWindow": "2026-10-13T08:27:00Z,2026-10-13T08:37:00Z",
+  "gitRevision": "not-recorded-on-git-free-control-checkout",
+  "modelManifestSha256": "8e369d667ed8ff4690dff8845e2f8059dfde949e5c531b3dc3b04356758e555f",
+  "reportCommand": "make campaign-report RUN_ID=pilot-text-20261013-082900-lowrate SCENARIO=pilot-three-tenant-text",
+  "routerHelmRevisionAtReport": 11,
+  "routerValuesSha256": "f3812c54f98aa410415c6a55559d42801158315fc9923057d4fb0ec166e952d7",
+  "runId": "pilot-text-20261013-082900-lowrate",
+  "scenario": {
+    "kind": "mixed-text-pilot-trial",
+    "name": "pilot-three-tenant-text",
+    "sha256": "6f0f3cf48e4f8314e560ffeef5d8915734a9460f095fec44283f5bcf838d2efa"
+  },
+  "schemaVersion": 1,
+  "versionsLockSha256": "1e9cd50a49745158fea1b6293161f6e3dd3966c3b36f8c49475762238195ddf2",
+  "workloadContractSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

@@ -300,6 +300,7 @@ def load_cost_profile(name: str, *, root: Path | None = None) -> CostProfile:
     if data.get("sourceType", "public-listing") not in {
         "public-listing",
         "user-confirmed-billing",
+        "provider-live-rate",
     }:
         raise ValidationError("cost profile sourceType is invalid")
     if data["schemaVersion"] != 1 or data["name"] != name:

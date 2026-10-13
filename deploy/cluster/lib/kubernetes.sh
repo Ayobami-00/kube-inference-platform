@@ -17,6 +17,11 @@ kip_kubectl() {
 
 kip_render_kubeadm_config() {
     local rendered=$1
+    local template="$KIP_CLUSTER_ROOT/templates/kubeadm-config.yaml"
+
+    if [ "${KIP_FLEET_CONTROL:-0}" = "1" ]; then
+        template="$KIP_DEPLOY_ROOT/fleet/kubeadm-control.yaml.tpl"
+    fi
 
     command sed \
         -e "s|__NODE_IP__|$KIP_NODE_IP_RESOLVED|g" \
@@ -26,7 +31,7 @@ kip_render_kubeadm_config() {
         -e "s|__DNS_DOMAIN__|$KIP_DNS_DOMAIN|g" \
         -e "s|__POD_CIDR__|$KIP_POD_CIDR|g" \
         -e "s|__SERVICE_CIDR__|$KIP_SERVICE_CIDR|g" \
-        "$KIP_CLUSTER_ROOT/templates/kubeadm-config.yaml" > "$rendered"
+        "$template" > "$rendered"
 }
 
 kip_existing_cluster_matches() {
@@ -40,6 +45,10 @@ kip_existing_cluster_matches() {
         -o 'jsonpath={.data.ClusterConfiguration}' 2>/dev/null) || return 1
     printf '%s\n' "$cluster_config" | command grep -Fq "podSubnet: $KIP_POD_CIDR" || return 1
     printf '%s\n' "$cluster_config" | command grep -Fq "serviceSubnet: $KIP_SERVICE_CIDR" || return 1
+    if [ "${KIP_FLEET_CONTROL:-0}" = "1" ]; then
+        printf '%s\n' "$cluster_config" \
+            | command grep -Fq 'controlPlaneEndpoint: api.kip.internal:6443' || return 1
+    fi
     node_ip=$(kip_kubectl get node "$KIP_NODE_NAME" \
         -o 'jsonpath={.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null) || return 1
     [ "$node_ip" = "$KIP_NODE_IP_RESOLVED" ]
@@ -62,7 +71,10 @@ kip_initialize_kubernetes() {
     output=$(kip_run_privileged kubeadm config images pull --config "$config" 2>&1) \
         || return 1
     kip_verbose_output "kubeadm image pre-pull" "$output"
-    kip_run_privileged kubeadm init --config "$config"
+    # kubeadm init prints a live join token and CA hash on success. Neither
+    # belongs in terminal logs, including VERBOSE=1 and remote transcripts.
+    output=$(kip_run_privileged kubeadm init --config "$config" 2>&1) || return 1
+    kip_verbose_output "kubeadm init" "Control plane initialized; join credentials withheld."
 }
 
 kip_configure_user_kubeconfig() {

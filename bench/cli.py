@@ -25,6 +25,7 @@ from .config import load_cost_profile, load_suite, validate_identifier
 from .errors import BenchError, ValidationError
 from .paths import reports_root, suites_root, work_root
 from .report import generate_report, load_normalized_input
+from .workloads import CLASSES, TENANTS, load_workload_contract, preview_trajectories
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +42,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate-suite", help="validate a committed suite")
     validate.add_argument("--suite", default="baseline", metavar="NAME")
+
+    workload_validate = subparsers.add_parser(
+        "workload-validate", help="validate a reviewed multi-tenant workload contract"
+    )
+    workload_validate.add_argument("--contract", default="pilot-v1", metavar="NAME")
+
+    workload_preview = subparsers.add_parser(
+        "workload-preview", help="show deterministic synthetic workload metadata"
+    )
+    workload_preview.add_argument("--contract", default="pilot-v1", metavar="NAME")
+    workload_preview.add_argument("--tenant", choices=TENANTS, required=True)
+    workload_preview.add_argument("--class", dest="workload_class", choices=CLASSES, required=True)
+    workload_preview.add_argument("--trial", type=int, default=1)
+    workload_preview.add_argument("--sessions", type=int, default=3)
 
     check = subparsers.add_parser("check", help="check benchmark assets and optional cluster state")
     check.add_argument("--cost-profile", metavar="NAME")
@@ -105,6 +120,34 @@ def _validate_suite(name: str) -> int:
             "sha256": suite.sha256,
             "measuredRequests": measured,
         }
+    )
+    return 0
+
+
+def _workload_validate(name: str) -> int:
+    contract = load_workload_contract(name)
+    _json_output(
+        {
+            "status": "valid",
+            "contract": contract.name,
+            "sha256": contract.sha256,
+            "tenants": contract.data["tenants"],
+            "classes": list(contract.data["classes"]),
+        }
+    )
+    return 0
+
+
+def _workload_preview(args: argparse.Namespace) -> int:
+    contract = load_workload_contract(args.contract)
+    _json_output(
+        preview_trajectories(
+            contract,
+            tenant=args.tenant,
+            workload_class=args.workload_class,
+            trial=args.trial,
+            sessions=args.sessions,
+        )
     )
     return 0
 
@@ -285,6 +328,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     handlers = {
         "validate-suite": lambda: _validate_suite(args.suite),
+        "workload-validate": lambda: _workload_validate(args.contract),
+        "workload-preview": lambda: _workload_preview(args),
         "check": lambda: _check(args),
         "install": lambda: _install(args),
         "run": lambda: _run(args),

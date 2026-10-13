@@ -1,0 +1,28 @@
+# Pilot Cilium underlay: kubelet advertises WireGuard 10.200.0.x node IPs.
+# WireGuard is MTU 1380; leave at least 50 bytes for VXLAN and extra margin.
+kubeProxyReplacement: false
+ipam:
+  mode: kubernetes
+routingMode: tunnel
+tunnelProtocol: vxlan
+MTU: 1300
+devices:
+  - wg-kip
+ipv4:
+  enabled: true
+ipv6:
+  enabled: false
+operator:
+  replicas: 1
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+hubble:
+  enabled: false
+cni:
+  exclusive: true
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: false

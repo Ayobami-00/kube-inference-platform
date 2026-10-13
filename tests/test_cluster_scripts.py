@@ -268,6 +268,9 @@ case "$*" in
         done
         mkdir -p "$KIP_ETC_ROOT/kubernetes"
         printf '%s\\n' test-kubeconfig > "$KIP_ETC_ROOT/kubernetes/admin.conf"
+        if [ -n "${KIP_TEST_KUBEADM_INIT_OUTPUT:-}" ]; then
+            printf '%s\\n' "$KIP_TEST_KUBEADM_INIT_OUTPUT"
+        fi
         ;;
 esac""",
     )
@@ -290,12 +293,31 @@ case "$args" in
         ;;
     *'api-resources --verbs=list --namespaced=true -o name'*)
         printf '%s\\n' configmaps
+        if [ "${KIP_TEST_GENERATED_MONITORING:-0}" = 1 ]; then
+            printf '%s\\n' persistentvolumeclaims secrets
+        fi
+        if [ "${KIP_TEST_GPU_LEASE:-0}" = 1 ]; then
+            printf '%s\\n' leases.coordination.k8s.io
+        fi
         ;;
     *'get namespaces -o json'*)
         if [ "${KIP_TEST_FOREIGN_NAMESPACE:-0}" = 1 ]; then
             printf '%s\\n' '{"items":[{"metadata":{"name":"default"}},{"metadata":{"name":"kube-system"}},{"metadata":{"name":"user-application"}}]}'
+        elif [ "${KIP_TEST_CILIUM_SECRETS:-0}" = 1 ]; then
+            if [ "${KIP_TEST_CILIUM_SECRETS_FOREIGN:-0}" = 1 ]; then
+                printf '%s\\n' '{"items":[{"metadata":{"name":"cilium-secrets","labels":{"app.kubernetes.io/managed-by":"foreign"}}}]}'
+            else
+                printf '%s\\n' '{"items":[{"metadata":{"name":"cilium-secrets","labels":{"app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/part-of":"cilium","helm.sh/chart":"cilium-1.20.1"},"annotations":{"meta.helm.sh/release-name":"cilium","meta.helm.sh/release-namespace":"kube-system"}}}]}'
+            fi
         else
             printf '%s\\n' '{"items":[{"metadata":{"name":"default"}},{"metadata":{"name":"kube-system"}},{"metadata":{"name":"kube-public"}},{"metadata":{"name":"kube-node-lease"}}]}'
+        fi
+        ;;
+    *'get all,secret,configmap,serviceaccount,role,rolebinding,pvc,ingress -n cilium-secrets -o json'*)
+        if [ "${KIP_TEST_CILIUM_SECRETS_FOREIGN:-0}" = 2 ]; then
+            printf '%s\\n' '{"items":[{"kind":"Secret","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"kube-root-ca.crt"}},{"kind":"ServiceAccount","metadata":{"name":"default"}},{"kind":"Role","metadata":{"name":"cilium-operator-tlsinterception-secrets"}},{"kind":"RoleBinding","metadata":{"name":"cilium-operator-tlsinterception-secrets"}}]}'
         fi
         ;;
     *'get deployments,statefulsets,daemonsets,jobs,cronjobs,pods --all-namespaces -o json'*)
@@ -330,7 +352,11 @@ case "$args" in
         printf '%s' 'sha256:0032315f2580f488ce433ff9d18de24ce631857ff7f1d73693171eeeb7affd52'
         ;;
     *'get '*.monitoring.coreos.com' --all-namespaces -o json'*)
-        printf '%s\\n' '{"items":[{"metadata":{"namespace":"foreign-observability","name":"foreign-monitor","labels":{"app.kubernetes.io/managed-by":"someone-else"}}}]}'
+        if [ "${KIP_TEST_OPENCOST_MONITOR:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"metadata":{"namespace":"kip-observability","name":"kip-opencost","labels":{"app.kubernetes.io/managed-by":"Helm"},"annotations":{"meta.helm.sh/release-name":"kip-opencost","meta.helm.sh/release-namespace":"kip-observability"}}}]}'
+        else
+            printf '%s\\n' '{"items":[{"metadata":{"namespace":"foreign-observability","name":"foreign-monitor","labels":{"app.kubernetes.io/managed-by":"someone-else"}}}]}'
+        fi
         ;;
     *'-n kip-benchmark get configmaps -o json'*)
         if [ "${KIP_TEST_BENCHMARK_NAMESPACE_EXTRA:-0}" = 1 ]; then
@@ -342,6 +368,38 @@ case "$args" in
     *'-n kip-observability get configmaps -o json'*)
         if [ "${KIP_TEST_OBSERVABILITY_NAMESPACE_EXTRA:-0}" = 1 ]; then
             printf '%s\\n' '{"items":[{"kind":"ConfigMap","metadata":{"name":"foreign"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n kip-observability get persistentvolumeclaims -o json'*)
+        if [ "${KIP_TEST_GENERATED_MONITORING:-0}" = 1 ]; then
+            printf '%s\\n' '{"items":[{"kind":"PersistentVolumeClaim","metadata":{"name":"alertmanager-kip-monitoring-alertmanager-db-alertmanager-kip-monitoring-alertmanager-0","labels":{"app.kubernetes.io/managed-by":"prometheus-operator","kube-inference-platform.io/volume":"alertmanager"}},"spec":{"volumeName":"kip-alertmanager"}},{"kind":"PersistentVolumeClaim","metadata":{"name":"prometheus-kip-monitoring-prometheus-db-prometheus-kip-monitoring-prometheus-0","labels":{"app.kubernetes.io/managed-by":"prometheus-operator","kube-inference-platform.io/volume":"prometheus"}},"spec":{"volumeName":"kip-prometheus"}}]}'
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n kip-observability get secrets -o json'*)
+        if [ "${KIP_TEST_GENERATED_MONITORING:-0}" = 1 ]; then
+            if [ "${KIP_TEST_FOREIGN_MONITORING_SECRET:-0}" = 1 ]; then
+                printf '%s\\n' '{"items":[{"kind":"Secret","metadata":{"name":"foreign-secret"},"type":"Opaque","data":{"ca":"x","cert":"x","key":"x"}}]}'
+            else
+                printf '%s\\n' '{"items":[{"kind":"Secret","metadata":{"name":"kip-monitoring-admission"},"type":"Opaque","data":{"ca":"x","cert":"x","key":"x"}}]}'
+            fi
+        else
+            printf '%s\\n' '{"items":[]}'
+        fi
+        ;;
+    *'-n gpu-operator get pods -l app.kubernetes.io/component=gpu-operator -o json'*)
+        printf '%s\\n' '{"items":[{"metadata":{"name":"gpu-operator-abcde-12345","labels":{"app.kubernetes.io/instance":"gpu-operator"}}}]}'
+        ;;
+    *'-n gpu-operator get leases.coordination.k8s.io -o json'*)
+        if [ "${KIP_TEST_GPU_LEASE:-0}" = 1 ]; then
+            if [ "${KIP_TEST_FOREIGN_GPU_LEASE:-0}" = 1 ]; then
+                printf '%s\\n' '{"items":[{"kind":"Lease","metadata":{"name":"53822513.nvidia.com"},"spec":{"holderIdentity":"foreign-pod_1234"}}]}'
+            else
+                printf '%s\\n' '{"items":[{"kind":"Lease","metadata":{"name":"53822513.nvidia.com"},"spec":{"holderIdentity":"gpu-operator-abcde-12345_1234"}}]}'
+            fi
         else
             printf '%s\\n' '{"items":[]}'
         fi
@@ -753,6 +811,56 @@ def test_bootstrap_renders_runtime_and_kubeadm_configuration(
     assert "cilium status --wait --wait-duration 10m --interactive=false --output json" in commands
     assert "12 passed" in result.stdout
     assert "install and validate the NVIDIA GPU Operator" in result.stdout
+
+
+def test_fleet_control_uses_stable_private_api_and_retains_taint(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    result = run_cluster_script(
+        BOOTSTRAP_SCRIPT,
+        cluster_fixture,
+        KIP_FLEET_CONTROL="1",
+        KIP_NODE_IP="192.0.2.10",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    kubeadm_config = cluster_fixture["capture_config"].read_text()
+    assert 'controlPlaneEndpoint: "api.kip.internal:6443"' in kubeadm_config
+    assert '    - "api.kip.internal"' in kubeadm_config
+    assert 'advertiseAddress: "192.0.2.10"' in kubeadm_config
+    commands = cluster_fixture["command_log"].read_text()
+    assert "fleet/cilium-values.yaml" in commands
+    assert "taint nodes --all node-role.kubernetes.io/control-plane-" not in commands
+    assert "cilium connectivity test --single-node" not in commands
+    assert "full fleet DNS/network checks follow worker joins" in result.stdout
+    values = (ROOT / "deploy/fleet/cilium-values.yaml").read_text()
+    assert "MTU: 1300" in values and "- wg-kip" in values
+
+
+def test_bootstrap_never_prints_kubeadm_join_credentials(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    fixture_token = "abcdef.abcdefghijklmnop"
+    result = run_cluster_script(
+        BOOTSTRAP_SCRIPT,
+        cluster_fixture,
+        KIP_FLEET_CONTROL="1",
+        KIP_NODE_IP="192.0.2.10",
+        KIP_VERBOSE="1",
+        KIP_TEST_KUBEADM_INIT_OUTPUT=(
+            f"[bootstrap-token] Using token: {fixture_token}\\n"
+            f"kubeadm join api.kip.internal:6443 --token {fixture_token}"
+        ),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fixture_token not in result.stdout + result.stderr
+    assert "join credentials withheld" in result.stdout
+
+
+def test_fleet_control_requires_explicit_mesh_node_ip(cluster_fixture: dict[str, Path]) -> None:
+    result = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture, KIP_FLEET_CONTROL="1")
+    assert result.returncode == 2
+    assert "requires the explicit WireGuard NODE_IP" in result.stderr
+    assert not cluster_fixture["command_log"].exists()
 
 
 def test_cilium_cli_uses_safe_terminal_width(cluster_fixture: dict[str, Path]) -> None:
@@ -1395,6 +1503,43 @@ def test_destroy_refuses_unmanaged_gpu_release(cluster_fixture: dict[str, Path])
     assert "kubeadm reset" not in commands
 
 
+def test_destroy_accepts_gpu_operator_lease_held_by_owned_operator_pod(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_GPU_LEASE="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_destroy_refuses_gpu_operator_lease_held_by_foreign_pod(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_GPU_RELEASE="1",
+        KIP_TEST_GPU_LEASE="1",
+        KIP_TEST_FOREIGN_GPU_LEASE="1",
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    assert "kubeadm reset" not in cluster_fixture["command_log"].read_text()
+
+
 def test_destroy_refuses_value_drift_in_gpu_release(cluster_fixture: dict[str, Path]) -> None:
     bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
     assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
@@ -1525,6 +1670,45 @@ def test_destroy_refuses_unmanaged_observability_state(
     assert "kubeadm reset" not in commands
 
 
+def test_destroy_accepts_exact_operator_generated_monitoring_objects(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_OBSERVABILITY_RELEASE="1",
+        KIP_TEST_GENERATED_MONITORING="1",
+        KIP_TEST_FOREIGN_MONITORING_CR="1",
+        KIP_TEST_OPENCOST_MONITOR="1",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_destroy_refuses_foreign_secret_among_generated_monitoring_objects(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_OBSERVABILITY_RELEASE="1",
+        KIP_TEST_GENERATED_MONITORING="1",
+        KIP_TEST_FOREIGN_MONITORING_SECRET="1",
+    )
+
+    assert result.returncode == 1
+    assert "release is unmanaged" in result.stdout
+    assert "kubeadm reset" not in cluster_fixture["command_log"].read_text()
+
+
 def test_destroy_preflights_every_layer_before_first_deletion(
     cluster_fixture: dict[str, Path],
 ) -> None:
@@ -1568,6 +1752,38 @@ def test_destroy_refuses_foreign_cluster_state_before_mutation(
     commands = cluster_fixture["command_log"].read_text()
     assert "kubeadm reset" not in commands
     assert "delete namespace" not in commands
+
+
+def test_destroy_accepts_exact_helm_owned_cilium_secrets_namespace(
+    cluster_fixture: dict[str, Path],
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_CILIUM_SECRETS="1",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("foreign_mode", ["1", "2"])
+def test_destroy_refuses_drifted_or_foreign_cilium_secrets_namespace(
+    cluster_fixture: dict[str, Path], foreign_mode: str
+) -> None:
+    bootstrap = run_cluster_script(BOOTSTRAP_SCRIPT, cluster_fixture)
+    assert bootstrap.returncode == 0, bootstrap.stdout + bootstrap.stderr
+    result = run_cluster_script(
+        DESTROY_SCRIPT,
+        cluster_fixture,
+        KIP_CONFIRM_DESTROY="1",
+        KIP_TEST_CILIUM_SECRETS="1",
+        KIP_TEST_CILIUM_SECRETS_FOREIGN=foreign_mode,
+    )
+    assert result.returncode == 1
+    commands = cluster_fixture["command_log"].read_text()
+    assert "kubeadm reset" not in commands
 
 
 def test_destroy_refuses_foreign_monitoring_custom_resource_before_crd_deletion(

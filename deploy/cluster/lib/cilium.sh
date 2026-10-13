@@ -7,10 +7,15 @@ kip_cilium_cli() {
 }
 
 kip_install_cilium() {
+    local values_file="$KIP_CLUSTER_ROOT/cilium-values.yaml"
+
+    if [ "${KIP_FLEET_CONTROL:-0}" = "1" ]; then
+        values_file="$KIP_DEPLOY_ROOT/fleet/cilium-values.yaml"
+    fi
     kip_exec helm upgrade --install cilium \
         "oci://quay.io/cilium/charts/cilium@$KIP_CILIUM_CHART_DIGEST" \
         --namespace kube-system \
-        --values "$KIP_CLUSTER_ROOT/cilium-values.yaml" \
+        --values "$values_file" \
         --wait \
         --timeout 10m
     kip_kubectl -n kube-system rollout status daemonset/cilium --timeout=10m >/dev/null

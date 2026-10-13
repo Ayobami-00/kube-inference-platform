@@ -40,7 +40,7 @@
       "pattern": "^https://[^/@?#\\s]+(/[^?#\\s]*)?$"
     },
     "sourceType": {
-      "enum": ["public-listing", "user-confirmed-billing"]
+      "enum": ["public-listing", "user-confirmed-billing", "provider-live-rate"]
     },
     "effectiveFrom": {
       "type": "string",

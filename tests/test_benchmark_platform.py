@@ -728,6 +728,33 @@ def test_opencost_client_uses_outward_rounded_whole_second_window() -> None:
     assert calls[0][1]["window"] == "2026-09-22T12:16:40Z,2026-09-22T12:17:49Z"
 
 
+def test_opencost_allocation_explicitly_includes_node_idle_cost() -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class HttpFixture:
+        def get(self, path, query):
+            calls.append((path, query))
+            return {"code": 200, "data": [{}]}
+
+    client = OpenCostClient("http://127.0.0.1:9003")
+    client._http = HttpFixture()
+    client.allocation(start="2026-10-13T00:42:00Z", end="2026-10-13T00:43:00Z")
+
+    assert calls == [
+        (
+            "/allocation/compute",
+            {
+                "window": "2026-10-13T00:42:00Z,2026-10-13T00:43:00Z",
+                "aggregate": "namespace,controllerKind,controller",
+                "shareIdle": "true",
+                "includeIdle": "true",
+                "idleByNode": "true",
+                "accumulate": "true",
+            },
+        )
+    ]
+
+
 def test_collect_telemetry_excludes_neighboring_windows() -> None:
     trial_start = "2026-09-01T00:00:00.000600Z"
     trial_end = "2026-09-01T00:01:00.001099Z"

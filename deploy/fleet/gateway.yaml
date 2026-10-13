@@ -1,0 +1,75 @@
+# Envoy Gateway defaults to a public LoadBalancer. The project-owned
+# EnvoyProxy explicitly forces a ClusterIP-only data plane for this pilot.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kip-private-proxy
+  namespace: envoy-gateway-system
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/part-of: kube-inference-platform
+spec:
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: JSON
+            json:
+              start_time: "%START_TIME%"
+              x_request_id: "%REQ(X-REQUEST-ID)%"
+              x_correlation_id: "%REQ(X-CORRELATION-ID)%"
+              response_code: "%RESPONSE_CODE%"
+              response_flags: "%RESPONSE_FLAGS%"
+              response_code_details: "%RESPONSE_CODE_DETAILS%"
+              upstream_host: "%UPSTREAM_HOST%"
+              duration_ms: "%DURATION%"
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+      envoyDeployment:
+        pod:
+          nodeSelector:
+            kubernetes.io/hostname: kip-control
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: kip-private-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/part-of: kube-inference-platform
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: kip-private-proxy
+    namespace: envoy-gateway-system
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: kip-inference-gateway
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/part-of: kube-inference-platform
+spec:
+  gatewayClassName: kip-private-inference
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same

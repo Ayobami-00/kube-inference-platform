@@ -1,0 +1,34 @@
+# Fleet-only overlay for the pinned v0.1 monitoring chart. The v0.1 values
+# remain unchanged so its single-node interface retains its original meaning.
+prometheus:
+  prometheusSpec:
+    externalLabels:
+      cluster: kip-pilot
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+    nodeSelector:
+      kubernetes.io/hostname: kip-control
+grafana:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  nodeSelector:
+    kubernetes.io/hostname: kip-control
+alertmanager:
+  alertmanagerSpec:
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+    nodeSelector:
+      kubernetes.io/hostname: kip-control
+prometheusOperator:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  nodeSelector:
+    kubernetes.io/hostname: kip-control

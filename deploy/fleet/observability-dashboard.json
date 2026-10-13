@@ -1,0 +1,39 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Ready nodes", "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:nodes_ready{cluster=~\"$cluster\"})"}]},
+    {"id": 2, "type": "stat", "title": "Ready model replicas", "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:replicas_ready{cluster=~\"$cluster\"})"}]},
+    {"id": 3, "type": "stat", "title": "llm-d ready endpoints", "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:ready_endpoints{cluster=~\"$cluster\"})"}]},
+    {"id": 4, "type": "stat", "title": "Completed requests/s", "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4}, "fieldConfig": {"defaults": {"unit": "reqps"}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:requests_completed_rate5m{cluster=~\"$cluster\",model_name=~\"$model\"})"}]},
+    {"id": 5, "type": "stat", "title": "Output tokens/s", "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4}, "fieldConfig": {"defaults": {"unit": "ops"}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:tokens_generated_rate5m{cluster=~\"$cluster\",model_name=~\"$model\"})"}]},
+    {"id": 6, "type": "stat", "title": "TTFT P95 (server)", "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4}, "fieldConfig": {"defaults": {"unit": "s"}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max(kip:fleet:ttft_p95_seconds{cluster=~\"$cluster\",model_name=~\"$model\"})"}]},
+    {"id": 7, "type": "timeseries", "title": "Completed requests by GPU worker", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (node) (kip:fleet:requests_completed_rate5m{cluster=~\"$cluster\",model_name=~\"$model\",node=~\"$node\"})", "legendFormat": "{{node}}"}]},
+    {"id": 8, "type": "timeseries", "title": "Tenant / priority arrivals at llm-d", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (fairness_id,priority) (kip:fleet:tenant_requests_rate5m{cluster=~\"$cluster\",model_name=~\"$model\",fairness_id=~\"$tenant\"})", "legendFormat": "{{fairness_id}} priority {{priority}}"}]},
+    {"id": 9, "type": "timeseries", "title": "Flow-control outcomes (requests/s)", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (outcome,priority) (kip:fleet:flow_outcomes_rate5m{cluster=~\"$cluster\"})", "legendFormat": "{{outcome}} priority {{priority}}"}]},
+    {"id": 10, "type": "timeseries", "title": "GPU utilization by node", "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8}, "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "avg by (node) (kip:fleet:gpu_utilization_ratio{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}}"}]},
+    {"id": 11, "type": "timeseries", "title": "GPU framebuffer used (MiB)", "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (node) (kip:fleet:gpu_memory_used_mib{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}}"}]},
+    {"id": 12, "type": "timeseries", "title": "GPU power and temperature", "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max by (node) (kip:fleet:gpu_power_watts{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}} W"}, {"refId": "B", "expr": "max by (node) (kip:fleet:gpu_temperature_celsius{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}} °C"}]},
+    {"id": 13, "type": "timeseries", "title": "vLLM queue and KV cache", "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (node) (kip:fleet:requests_waiting{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}} waiting"}, {"refId": "B", "expr": "max by (node) (kip:fleet:kv_cache_utilization_ratio{cluster=~\"$cluster\",node=~\"$node\"})", "legendFormat": "{{node}} KV ratio"}]},
+    {"id": 14, "type": "stat", "title": "Verified Vast rental (USD/hour; infrastructure audit)", "gridPos": {"x": 0, "y": 36, "w": 8, "h": 5}, "fieldConfig": {"defaults": {"unit": "currencyUSD"}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kip:fleet:rental_usd_per_hour{cluster=~\"$cluster\"})"}]},
+    {"id": 15, "type": "timeseries", "title": "Verified node rental rates (USD/hour; not tenant attribution)", "gridPos": {"x": 8, "y": 36, "w": 16, "h": 5}, "fieldConfig": {"defaults": {"unit": "currencyUSD"}}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "kip:fleet:node_rental_usd_per_hour{cluster=~\"$cluster\",node=~\"$node\"}", "legendFormat": "{{node}}"}]},
+    {"id": 16, "type": "timeseries", "title": "Flow-control queued requests by tenant and priority", "gridPos": {"x": 0, "y": 41, "w": 24, "h": 8}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (fairness_id,priority) (kip:fleet:flow_queue_depth{cluster=~\"$cluster\",model_name=~\"$model\",fairness_id=~\"$tenant\"})", "legendFormat": "{{fairness_id}} priority {{priority}}"}]}
+  ],
+  "refresh": "15s",
+  "schemaVersion": 42,
+  "tags": ["kip", "fleet", "llm-d", "pilot"],
+  "templating": {"list": [
+    {"name": "cluster", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(kip:fleet:tenant_requests_rate5m, cluster)"}, "includeAll": true, "allValue": ".*", "refresh": 1},
+    {"name": "model", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(kip:fleet:tenant_requests_rate5m{cluster=~\"$cluster\"}, model_name)"}, "includeAll": true, "allValue": ".*", "refresh": 1},
+    {"name": "tenant", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(kip:fleet:tenant_requests_rate5m{cluster=~\"$cluster\"}, fairness_id)"}, "includeAll": true, "allValue": ".*", "refresh": 1},
+    {"name": "node", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(kip:fleet:gpu_utilization_ratio{cluster=~\"$cluster\"}, node)"}, "includeAll": true, "allValue": ".*", "refresh": 1}
+  ]},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "utc",
+  "title": "KIP / llm-d Fleet Pilot",
+  "uid": "kip-llmd-fleet-pilot",
+  "version": 1
+}

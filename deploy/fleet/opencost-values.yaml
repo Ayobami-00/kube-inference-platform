@@ -1,0 +1,28 @@
+# Fleet pricing is derived from verified Vast /instances dph_total observations.
+# The ConfigMap is created separately from the ignored, task-local audit ledger.
+kip:
+  pricingState: fleet-csv
+opencost:
+  nodeSelector:
+    kubernetes.io/hostname: kip-control
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  exporter:
+    defaultClusterId: kip-pilot
+    extraEnv:
+      USE_CSV_PROVIDER: "true"
+      CSV_PATH: /etc/kip-fleet-pricing/pricing.csv
+    extraVolumeMounts:
+      - name: kip-fleet-pricing
+        mountPath: /etc/kip-fleet-pricing
+        readOnly: true
+      - name: kip-opencost-config
+        mountPath: /var/configs
+extraVolumes:
+  - name: kip-fleet-pricing
+    configMap:
+      name: kip-fleet-opencost-pricing
+  - name: kip-opencost-config
+    emptyDir: {}

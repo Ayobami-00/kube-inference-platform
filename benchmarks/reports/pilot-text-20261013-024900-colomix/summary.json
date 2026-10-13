@@ -1,0 +1,307 @@
+{
+  "cohorts": [
+    {
+      "aiperfZeroDurationRejections": 0,
+      "class": "chat",
+      "counts": {
+        "admitted": 136,
+        "completed": 136,
+        "dispatched": 136,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 136,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 136
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "7fed14982be13fe02b08c8c864fb69cdae4e77f0d42a965fbfca5afc0ca4facf",
+        "offeredSessionsPerSecond": 0.4,
+        "plannedTurns": 136,
+        "seed": 12938585344667100058,
+        "sessions": 32,
+        "trial": 8
+      },
+      "e2eMs": {
+        "p50": 5635.315631,
+        "p95": 9348.558118,
+        "p99": 10238.490278
+      },
+      "endedAtUtc": "2026-10-13T02:51:03.292590Z",
+      "estimatedTenantUsdByOutputShare": 0.04361,
+      "gatewayDurationP95Ms": 9281.0,
+      "gatewayToEppDispatchP95Ms": 5138.429,
+      "inputTokens": 246987,
+      "normalizedEarlyGatewayStarts": 17,
+      "observedSloChecks": {
+        "success": true,
+        "tpot": true,
+        "ttft": false
+      },
+      "observedTtftTargetMet": false,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 3.635,
+      "outputTokens": 21125,
+      "outputTokensPerSecond": 158.023147,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "tpotP95Ms": 100,
+        "ttftP95Ms": 1500
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 1.017332,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 4.178,
+      "sessionCompletionP95Ms": 62811.937,
+      "startedAtUtc": "2026-10-13T02:48:49.609643Z",
+      "successRate": 1.0,
+      "tenant": "tenant-a",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 19.972315,
+        "p95": 23.889714,
+        "p99": 24.986701
+      },
+      "ttftMs": {
+        "p50": 2263.015532,
+        "p95": 5690.09089,
+        "p99": 7561.359976
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 67,
+        "kip-gpu-2": 69
+      }
+    },
+    {
+      "aiperfZeroDurationRejections": 0,
+      "class": "agentic-style",
+      "counts": {
+        "admitted": 131,
+        "completed": 131,
+        "dispatched": 131,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 131,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 131
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "324cfbba33856ed979ede8cdc6b6013b5dfbf0ebf2ea06fdad06158b7f1abae5",
+        "offeredSessionsPerSecond": 0.3,
+        "plannedTurns": 131,
+        "seed": 11396523604682415239,
+        "sessions": 20,
+        "trial": 4
+      },
+      "e2eMs": {
+        "p50": 3579.912745,
+        "p95": 10093.530802,
+        "p99": 12677.167477
+      },
+      "endedAtUtc": "2026-10-13T02:50:58.029139Z",
+      "estimatedTenantUsdByOutputShare": 0.033978,
+      "gatewayDurationP95Ms": 9949.0,
+      "gatewayToEppDispatchP95Ms": 2303.606,
+      "inputTokens": 466918,
+      "normalizedEarlyGatewayStarts": 25,
+      "observedSloChecks": {
+        "success": true,
+        "taskCompletion": true,
+        "ttft": false
+      },
+      "observedTtftTargetMet": false,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 3.933,
+      "outputTokens": 16459,
+      "outputTokensPerSecond": 128.058421,
+      "proposedSlo": {
+        "successRateMin": 0.98,
+        "taskP95Ms": 90000,
+        "ttftP95Ms": 2000
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 1.019239,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 5.219,
+      "sessionCompletionP95Ms": 82705.651,
+      "startedAtUtc": "2026-10-13T02:48:49.501863Z",
+      "successRate": 1.0,
+      "tenant": "tenant-b",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 19.765554,
+        "p95": 26.222783,
+        "p99": 28.252153
+      },
+      "ttftMs": {
+        "p50": 1550.918226,
+        "p95": 2977.150321,
+        "p99": 6964.008652
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 66,
+        "kip-gpu-2": 65
+      }
+    },
+    {
+      "aiperfZeroDurationRejections": 4,
+      "class": "batch",
+      "counts": {
+        "admitted": 100,
+        "completed": 96,
+        "dispatched": 96,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 100,
+        "queued": 0,
+        "rejected": 4,
+        "sent": 100
+      },
+      "dataset": {
+        "arrivalSchedule": "four-burst-scaled-v2",
+        "datasetSha256": "48a30fb5f676d1f1108b120cbcef00ad0b85dcb68eccb91abeb7f05b232f5b50",
+        "offeredSessionsPerSecond": 0.4,
+        "plannedTurns": 100,
+        "seed": 1262576491993358607,
+        "sessions": 100,
+        "trial": 4
+      },
+      "e2eMs": {
+        "p50": 19200.487482,
+        "p95": 60683.13497,
+        "p99": 67522.353559
+      },
+      "endedAtUtc": "2026-10-13T02:53:37.687687Z",
+      "estimatedTenantUsdByOutputShare": 0.127352,
+      "gatewayDurationP95Ms": 60006.0,
+      "gatewayToEppDispatchP95Ms": 47669.455,
+      "inputTokens": 232555,
+      "normalizedEarlyGatewayStarts": 0,
+      "observedSloChecks": {
+        "completionWithinTenMinutes": true,
+        "success": false
+      },
+      "observedTtftTargetMet": null,
+      "offeredToCompletedWithinTenMinutesRate": 0.96,
+      "offeredToSentP95Ms": 9.899,
+      "outputTokens": 61690,
+      "outputTokensPerSecond": 214.069823,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "withinMs": 600000,
+        "withinRateMin": 0.95
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 0.333129,
+      "sampleThresholdMet": false,
+      "sentToGatewayP95Ms": 6.186,
+      "sessionCompletionP95Ms": 59981.398,
+      "startedAtUtc": "2026-10-13T02:48:49.510683Z",
+      "successRate": 0.96,
+      "tenant": "tenant-c",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 19.359708,
+        "p95": 21.671938,
+        "p99": 23.02853
+      },
+      "ttftMs": {
+        "p50": 5466.924461,
+        "p95": 50213.978885,
+        "p99": 59114.767648
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 41,
+        "kip-gpu-2": 55
+      }
+    }
+  ],
+  "cost": {
+    "allocatedUsd": 0.20494,
+    "auditUsd": 0.204741,
+    "basis": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+    "currency": "USD",
+    "fleetHourlyUsd": 2.047407407407407,
+    "nodeHourlyUsd": {
+      "kip-control": 0.6814814814814815,
+      "kip-gpu-1": 0.6222222222222222,
+      "kip-gpu-2": 0.7437037037037036
+    },
+    "rateObservedAtUtc": "2026-10-13T03:03:00.057313Z",
+    "reconciliationPercent": 0.0972,
+    "tenantAttribution": "illustrative output-token share of allocated infrastructure cost; not invoice or measured per-tenant resource usage"
+  },
+  "dataQuality": {
+    "status": "partial",
+    "warnings": [
+      "At least one proposed class SLO check was missed in this trial.",
+      "42 colocated Gateway start timestamps preceded the client send marker by at most 1 ms and were normalized to send time for lifecycle ordering; raw timing evidence remains private.",
+      "4 requests were rejected with exact AIPerf/Gateway/EPP evidence of llm-d queue-TTL HTTP 429; they are not counted as completed or token-producing requests.",
+      "At least one class has fewer than 100 completed samples in this trial.",
+      "Only one trial per class is present; three independent trials and confidence intervals are required for nominal SLO acceptance.",
+      "No voice pipeline, noisy-tenant stress, worker-failure, or clean-rebuild evidence yet.",
+      "Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.",
+      "Tenant cost is an output-token-share estimate, not bill-reconciling attribution.",
+      "Output-token-share tenant cost attribution excludes the queue occupancy of rejected requests.",
+      "AIPerf exported zero-duration error rows for queue-TTL rejections; their terminal times come from matching Envoy access-log start plus duration."
+    ]
+  },
+  "grafanaUrl": "http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T02%3A48%3A00.000000Z&to=2026-10-13T02%3A54%3A00.000000Z&timezone=utc&var-cluster=kip-pilot&var-model=qwen2.5-7b-instruct",
+  "kind": "mixed-text-pilot-trial",
+  "observedServingWorkers": [
+    "kip-gpu-1",
+    "kip-gpu-2"
+  ],
+  "routing": {
+    "helmRevision": 11,
+    "lastHelmReconcileAtReportUtc": "2026-10-13T02:48:10.229619Z",
+    "picker": "weighted-random-picker",
+    "pickerPodCreatedAtUtc": "2026-10-13T02:40:23.000000Z",
+    "valuesSha256": "f3812c54f98aa410415c6a55559d42801158315fc9923057d4fb0ec166e952d7"
+  },
+  "runId": "pilot-text-20261013-024900-colomix",
+  "runtime": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "modelRevision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "name": "vllm",
+    "replicas": 2,
+    "version": "0.30.0"
+  },
+  "scenario": {
+    "kind": "mixed-text-pilot-trial",
+    "name": "pilot-three-tenant-text",
+    "sha256": "6f0f3cf48e4f8314e560ffeef5d8915734a9460f095fec44283f5bcf838d2efa"
+  },
+  "schemaVersion": 1,
+  "status": "partial",
+  "telemetry": {
+    "eppQueueMax": 19.0,
+    "eppQueueSource": "llm_d_epp_flow_control_queue_size; true flow-control backlog",
+    "gpuMemoryMaxMiBByNode": {
+      "kip-gpu-1": 21013.0,
+      "kip-gpu-2": 21012.0
+    },
+    "gpuPowerAverageWattsByNode": {
+      "kip-gpu-1": 218.387375,
+      "kip-gpu-2": 210.314917
+    },
+    "gpuUtilizationRatioByNode": {
+      "kip-gpu-1": 0.583333,
+      "kip-gpu-2": 0.583333
+    },
+    "runtimeWaitingMax": 1.0
+  },
+  "window": {
+    "costWindow": "2026-10-13T02:48:00Z,2026-10-13T02:54:00Z",
+    "endedAtUtc": "2026-10-13T02:53:37.687687Z",
+    "startedAtUtc": "2026-10-13T02:48:49.501863Z"
+  },
+  "workload": {
+    "contract": "pilot-v1",
+    "rootSeed": 42,
+    "sha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+  }
+}

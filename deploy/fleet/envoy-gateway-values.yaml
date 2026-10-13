@@ -1,0 +1,49 @@
+# Adapted from Envoy AI Gateway v0.7.0's pinned base and InferencePool addon.
+# The data-plane Service type is controlled by gateway.yaml's EnvoyProxy.
+global:
+  images:
+    envoyGateway:
+      image: docker.io/envoyproxy/gateway:v1.8.1@sha256:b055b426588bfe1599eba0e3824711a5f8d8d307d9509302bd28f44dc2ab7adf
+      pullPolicy: IfNotPresent
+    envoyProxy:
+      image: docker.io/envoyproxy/envoy:distroless-v1.38.1@sha256:91be2297e89907c05cb02ce614a68a85d4bfcbb9d5f168daf3dbb08e0ec80dc8
+      pullPolicy: IfNotPresent
+    ratelimit:
+      image: docker.io/envoyproxy/ratelimit:ff287602@sha256:266d0ab0e8298bb62f4e89d16e6cd1cb8e36a4a0254eadc056423d09aad90c4c
+      pullPolicy: IfNotPresent
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    logging:
+      level:
+        default: info
+    provider:
+      type: Kubernetes
+    extensionApis:
+      enableEnvoyPatchPolicy: true
+      enableBackend: true
+    extensionManager:
+      hooks:
+        xdsTranslator:
+          translation:
+            listener:
+              includeAll: true
+            route:
+              includeAll: true
+            cluster:
+              includeAll: true
+            secret:
+              includeAll: true
+          post:
+            - Translation
+            - Cluster
+            - Route
+      service:
+        fqdn:
+          hostname: ai-gateway-controller.envoy-ai-gateway-system.svc.cluster.local
+          port: 1063
+      backendResources:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          version: v1

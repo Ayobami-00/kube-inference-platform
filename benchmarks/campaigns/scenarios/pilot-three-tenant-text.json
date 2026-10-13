@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "name": "pilot-three-tenant-text",
+  "kind": "mixed-text-pilot-trial",
+  "cohorts": [
+    {"tenant": "tenant-a", "class": "chat"},
+    {"tenant": "tenant-b", "class": "agentic-style"},
+    {"tenant": "tenant-c", "class": "batch"}
+  ]
+}

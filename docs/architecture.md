@@ -26,16 +26,16 @@ flowchart TB
         Suite[Reviewed AIPerf benchmark suites]
     end
 
-    subgraph Control[Planned Go control plane]
-        Controller[Model and runtime controllers]
-        Planner[Topology-aware placement and capacity]
-        Scaler[SLO-aware autoscaler]
-        Cache[Model cache manager]
+    subgraph Control[Future KIP control plane]
+        Controller[Focused ModelDeployment controller]
+        Planner[Topology-aware placement and capacity policy]
+        Scaler[Future SLO-aware autoscaler]
+        Cache[Model cache policy]
     end
 
     subgraph Serving[Inference request path]
-        Gateway[Gateway: authentication, quotas, admission, streaming]
-        Router[Endpoint routing: load, queue, and KV affinity]
+        Gateway[Envoy AI Gateway: trusted identity, admission, streaming]
+        Router[llm-d InferencePool and endpoint picker: load, queue, KV affinity]
         Replicas[vLLM or SGLang replicas: combined or prefill/decode]
     end
 
@@ -80,11 +80,13 @@ flowchart TB
     Reports -.->|measured evidence for future policies| Planner
 ```
 
-The control plane decides *what* should run and *where*: it translates `ModelDeployment`
-resources into Kubernetes workloads, places GPU groups according to topology, and scales
-replicas against inference SLOs. The gateway decides *whether* to admit a request and *which
-replica* should receive it while forwarding streaming responses. The selected runtime retains
-control of batching and token scheduling *inside* its replica.
+The future control plane decides *what* should run and *where*: a focused
+`ModelDeployment` controller can translate reviewed profiles into Kubernetes workloads and
+placement policy. For the first multi-tenant pilot, KIP remains the sole owner of vLLM
+Deployments, while Envoy AI Gateway owns the proxy/request path and llm-d owns the
+`InferencePool` endpoint picker. This avoids implementing a second Go reverse proxy or two
+controllers for the same Deployment. The gateway authenticates and admits a request; llm-d
+chooses a replica. vLLM retains batching and token scheduling *inside* that replica.
 
 Horizontal replicas and distributed execution solve different problems. The platform should
 route among independent replicas for capacity and availability, while supporting tensor,
@@ -97,6 +99,68 @@ clients, while Prometheus, DCGM, OpenCost, and future tracing provide the latenc
 GPU, energy, and cost evidence used to compare routing, placement, and scaling policies. The
 diagram is a destination, not a claim that its Go control plane, gateway, autoscaler, SGLang
 adapter, or multi-node execution exists in v0.1.
+
+## Three-node llm-d pilot (partially validated)
+
+The separate pilot validated a private request path on one non-HA control plane and
+two cross-region RTX 4090 workers; the three task-owned VMs have since been
+released. It is not yet an accepted SLO or failure-recovery campaign. In that
+deployment KIP owned both pinned, same-revision vLLM Deployments; llm-d owned
+the `InferencePool` and endpoint picker; Envoy AI Gateway owned its private
+Gateway and route.
+
+```mermaid
+flowchart LR
+    Clients[Seeded AIPerf tenants A/B/C] --> Gateway[Private Envoy AI Gateway]
+    Gateway -.->|authorize and inject trusted identity| Auth[Fail-closed tenant/class authorization]
+    Gateway --> EPP[llm-d endpoint picker and flow control]
+    EPP --> Pool[InferencePool]
+    Pool --> W1[vLLM Qwen replica / GPU worker 1]
+    Pool --> W2[vLLM Qwen replica / GPU worker 2]
+    W1 --> Metrics[Prometheus / DCGM / OpenCost]
+    W2 --> Metrics
+    Gateway --> Metrics
+    EPP --> Metrics
+    Metrics --> Grafana[Private Grafana]
+    Metrics --> Reports[Sanitized local pilot reports]
+    Ledger[Verified Vast node-rate ledger] --> Reports
+```
+
+WireGuard supplies the private node and Kubernetes API network. The first mixed text
+smoke reached both workers and reconciled AIPerf, Gateway, and endpoint-picker events;
+it had too few samples for SLO acceptance. A subsequent intentionally bursty trial
+exposed 429 load-shedding and unacceptable chat/agentic TTFT. The batch arrival
+generator was corrected to honor its reviewed offered rate. A later, genuinely
+restarted weighted-random EPP completed a 367-request, zero-error text trial with
+near-even worker selection, but chat and agentic TTFT still missed proposed SLOs.
+A subsequent 61-request smoke covered all nine tenant/class combinations and
+reconciled its verified node-rate audit with OpenCost. It is not an adequately
+sampled SLO campaign. A controlled KIP-owned model-Pod loss then completed
+11/11 streamed turns on the surviving GPU worker; after the replacement was
+Ready, a second 11/11 trace reached both workers. These are small recovery
+checkpoints, not evidence of in-flight continuity or sustained fault tolerance.
+The initial cross-region placement of Gateway/EPP on the Japanese worker added
+measurable pre-dispatch latency for a Romanian control-node client. Both CPU
+request-path Pods are now pinned to the control node with exact control-plane
+taint tolerations; the two model Pods remain on separate GPU workers. On the
+same seeded isolated chat trace, client P95 TTFT improved from 1.84 to 0.88 seconds,
+but one passing isolated trial is not nominal mixed-load acceptance.
+At the earlier mixed offered rates, the colocated path still missed chat and
+agentic-style TTFT targets and rejected four of 100 batch requests at llm-d's
+60-second queue TTL. Actual flow-control queue depth reached 19; the report
+counts the 363 completions and four rejections separately and marks the run
+partial. AIPerf's zero-duration error placeholders are not treated as measured
+latency: rejection terminal times are reconstructed from matching Envoy
+start/duration evidence and explicitly disclosed. Lower-load calibration is
+required; colocation alone does not establish capacity or fairness.
+A later lower-offered-rate mix completed 345/345 streamed turns without queue
+rejections, and its infrastructure cost reconciled to OpenCost within 0.1%.
+Nevertheless chat P95 TTFT was 3.75 seconds and agentic-style P95 TTFT was
+2.01 seconds, both above their proposed targets. The actual flow-control queue
+still peaked at 13. That single calibration trial is also partial. Its sanitized
+report was copied locally before the exact task-owned VMs were released; VM-local
+raw traces and model caches were not retained.
+Nominal nine-cohort trials, voice, and clean rebuild remain acceptance work.
 
 ## Bootstrap dependency chain
 

@@ -1,0 +1,303 @@
+{
+  "cohorts": [
+    {
+      "aiperfZeroDurationRejections": 0,
+      "class": "chat",
+      "counts": {
+        "admitted": 125,
+        "completed": 125,
+        "dispatched": 125,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 125,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 125
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "a94f09f3de33c4db66f4c5fde0800bca038d2252fa5b1f957a2e427aef170c05",
+        "offeredSessionsPerSecond": 0.2,
+        "plannedTurns": 125,
+        "seed": 12616622334978845991,
+        "sessions": 32,
+        "trial": 12
+      },
+      "e2eMs": {
+        "p50": 3610.934798,
+        "p95": 7514.858024,
+        "p99": 10373.45883
+      },
+      "endedAtUtc": "2026-10-13T08:31:30.233109Z",
+      "estimatedTenantUsdByOutputShare": 0.067718,
+      "gatewayDurationP95Ms": 6732.0,
+      "gatewayToEppDispatchP95Ms": 2539.93,
+      "inputTokens": 222035,
+      "normalizedEarlyGatewayStarts": 12,
+      "observedSloChecks": {
+        "success": true,
+        "tpot": true,
+        "ttft": false
+      },
+      "observedTtftTargetMet": false,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 7.895,
+      "outputTokens": 19456,
+      "outputTokensPerSecond": 85.252926,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "tpotP95Ms": 100,
+        "ttftP95Ms": 1500
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 0.547729,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 9.424,
+      "sessionCompletionP95Ms": 48587.907,
+      "startedAtUtc": "2026-10-13T08:27:42.018068Z",
+      "successRate": 1.0,
+      "tenant": "tenant-a",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 17.54586,
+        "p95": 21.306712,
+        "p99": 24.820882
+      },
+      "ttftMs": {
+        "p50": 417.276496,
+        "p95": 3751.374687,
+        "p99": 7725.203531
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 76,
+        "kip-gpu-2": 49
+      }
+    },
+    {
+      "aiperfZeroDurationRejections": 0,
+      "class": "agentic-style",
+      "counts": {
+        "admitted": 120,
+        "completed": 120,
+        "dispatched": 120,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 120,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 120
+      },
+      "dataset": {
+        "arrivalSchedule": "seeded-poisson-v1",
+        "datasetSha256": "90b4b88ad1e80cc578853de6c257feb3024f32941ecb6ce3f492eba30efa659d",
+        "offeredSessionsPerSecond": 0.15,
+        "plannedTurns": 120,
+        "seed": 16079560903304582160,
+        "sessions": 20,
+        "trial": 5
+      },
+      "e2eMs": {
+        "p50": 2338.984222,
+        "p95": 8666.845426,
+        "p99": 9715.073364
+      },
+      "endedAtUtc": "2026-10-13T08:31:03.523870Z",
+      "estimatedTenantUsdByOutputShare": 0.062209,
+      "gatewayDurationP95Ms": 8636.0,
+      "gatewayToEppDispatchP95Ms": 1197.586,
+      "inputTokens": 433642,
+      "normalizedEarlyGatewayStarts": 11,
+      "observedSloChecks": {
+        "success": true,
+        "taskCompletion": true,
+        "ttft": false
+      },
+      "observedTtftTargetMet": false,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 8.76,
+      "outputTokens": 17873,
+      "outputTokensPerSecond": 88.684174,
+      "proposedSlo": {
+        "successRateMin": 0.98,
+        "taskP95Ms": 90000,
+        "ttftP95Ms": 2000
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 0.595429,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 9.299,
+      "sessionCompletionP95Ms": 68547.661,
+      "startedAtUtc": "2026-10-13T08:27:41.988475Z",
+      "successRate": 1.0,
+      "tenant": "tenant-b",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 17.807485,
+        "p95": 21.004004,
+        "p99": 26.979422
+      },
+      "ttftMs": {
+        "p50": 710.100389,
+        "p95": 2010.494495,
+        "p99": 2833.548003
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 54,
+        "kip-gpu-2": 66
+      }
+    },
+    {
+      "aiperfZeroDurationRejections": 0,
+      "class": "batch",
+      "counts": {
+        "admitted": 100,
+        "completed": 100,
+        "dispatched": 100,
+        "failed": 0,
+        "inFlight": 0,
+        "offered": 100,
+        "queued": 0,
+        "rejected": 0,
+        "sent": 100
+      },
+      "dataset": {
+        "arrivalSchedule": "four-burst-scaled-v2",
+        "datasetSha256": "22572a61c82a10fa3579607e883f436e04b91d23e3034947caab99db6bf943c7",
+        "offeredSessionsPerSecond": 0.2,
+        "plannedTurns": 100,
+        "seed": 9956077513300546782,
+        "sessions": 100,
+        "trial": 5
+      },
+      "e2eMs": {
+        "p50": 16385.108591,
+        "p95": 29734.560659,
+        "p99": 35634.922585
+      },
+      "endedAtUtc": "2026-10-13T08:36:33.589208Z",
+      "estimatedTenantUsdByOutputShare": 0.211623,
+      "gatewayDurationP95Ms": 29693.0,
+      "gatewayToEppDispatchP95Ms": 15460.141,
+      "inputTokens": 248353,
+      "normalizedEarlyGatewayStarts": 0,
+      "observedSloChecks": {
+        "completionWithinTenMinutes": true,
+        "success": true
+      },
+      "observedTtftTargetMet": null,
+      "offeredToCompletedWithinTenMinutesRate": 1.0,
+      "offeredToSentP95Ms": 13.558,
+      "outputTokens": 60801,
+      "outputTokensPerSecond": 114.392178,
+      "proposedSlo": {
+        "successRateMin": 0.99,
+        "withinMs": 600000,
+        "withinRateMin": 0.95
+      },
+      "rejectionTerminalSource": "Envoy access-log start + duration for exact 60-second queue-TTL 429",
+      "requestThroughputPerSecond": 0.188142,
+      "sampleThresholdMet": true,
+      "sentToGatewayP95Ms": 5.957,
+      "sessionCompletionP95Ms": 29696.869,
+      "startedAtUtc": "2026-10-13T08:27:42.075592Z",
+      "successRate": 1.0,
+      "tenant": "tenant-c",
+      "timestampOrderingToleranceMs": 1,
+      "tpotMs": {
+        "p50": 19.283672,
+        "p95": 21.300725,
+        "p99": 23.687518
+      },
+      "ttftMs": {
+        "p50": 3510.20065,
+        "p95": 16585.640374,
+        "p99": 17566.504574
+      },
+      "workerDispatches": {
+        "kip-gpu-1": 44,
+        "kip-gpu-2": 56
+      }
+    }
+  ],
+  "cost": {
+    "allocatedUsd": 0.34155,
+    "auditUsd": 0.341235,
+    "basis": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+    "currency": "USD",
+    "fleetHourlyUsd": 2.047407407407407,
+    "nodeHourlyUsd": {
+      "kip-control": 0.6814814814814815,
+      "kip-gpu-1": 0.6222222222222222,
+      "kip-gpu-2": 0.7437037037037036
+    },
+    "rateObservedAtUtc": "2026-10-13T08:36:47.171080Z",
+    "reconciliationPercent": 0.0923,
+    "tenantAttribution": "illustrative output-token share of allocated infrastructure cost; not invoice or measured per-tenant resource usage"
+  },
+  "dataQuality": {
+    "status": "partial",
+    "warnings": [
+      "At least one proposed class SLO check was missed in this trial.",
+      "23 colocated Gateway start timestamps preceded the client send marker by at most 1 ms and were normalized to send time for lifecycle ordering; raw timing evidence remains private.",
+      "Only one trial per class is present; three independent trials and confidence intervals are required for nominal SLO acceptance.",
+      "No voice pipeline, noisy-tenant stress, worker-failure, or clean-rebuild evidence yet.",
+      "Per-request EPP queue transitions are unavailable; queued is not inferred from aggregate samples.",
+      "Tenant cost is an output-token-share estimate, not bill-reconciling attribution."
+    ]
+  },
+  "grafanaUrl": "http://localhost:3000/d/kip-llmd-fleet-pilot/kip-llm-d-fleet-pilot?from=2026-10-13T08%3A27%3A00.000000Z&to=2026-10-13T08%3A37%3A00.000000Z&timezone=utc&var-cluster=kip-pilot&var-model=qwen2.5-7b-instruct",
+  "kind": "mixed-text-pilot-trial",
+  "observedServingWorkers": [
+    "kip-gpu-1",
+    "kip-gpu-2"
+  ],
+  "routing": {
+    "helmRevision": 11,
+    "lastHelmReconcileAtReportUtc": "2026-10-13T02:48:10.229619Z",
+    "picker": "weighted-random-picker",
+    "pickerPodCreatedAtUtc": "2026-10-13T02:40:23.000000Z",
+    "valuesSha256": "f3812c54f98aa410415c6a55559d42801158315fc9923057d4fb0ec166e952d7"
+  },
+  "runId": "pilot-text-20261013-082900-lowrate",
+  "runtime": {
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "modelRevision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "name": "vllm",
+    "replicas": 2,
+    "version": "0.30.0"
+  },
+  "scenario": {
+    "kind": "mixed-text-pilot-trial",
+    "name": "pilot-three-tenant-text",
+    "sha256": "6f0f3cf48e4f8314e560ffeef5d8915734a9460f095fec44283f5bcf838d2efa"
+  },
+  "schemaVersion": 1,
+  "status": "partial",
+  "telemetry": {
+    "eppQueueMax": 13.0,
+    "eppQueueSource": "llm_d_epp_flow_control_queue_size; true flow-control backlog",
+    "gpuMemoryMaxMiBByNode": {
+      "kip-gpu-1": 21013.0,
+      "kip-gpu-2": 21012.0
+    },
+    "gpuPowerAverageWattsByNode": {
+      "kip-gpu-1": 186.936525,
+      "kip-gpu-2": 182.613225
+    },
+    "gpuUtilizationRatioByNode": {
+      "kip-gpu-1": 0.475,
+      "kip-gpu-2": 0.5015
+    },
+    "runtimeWaitingMax": 0.0
+  },
+  "window": {
+    "costWindow": "2026-10-13T08:27:00Z,2026-10-13T08:37:00Z",
+    "endedAtUtc": "2026-10-13T08:36:33.589208Z",
+    "startedAtUtc": "2026-10-13T08:27:41.988475Z"
+  },
+  "workload": {
+    "contract": "pilot-v1",
+    "rootSeed": 42,
+    "sha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+  }
+}

@@ -29,11 +29,16 @@ KIP_VERBOSE=${KIP_VERBOSE:-0}
 KIP_NODE_IP=${KIP_NODE_IP:-}
 KIP_POD_CIDR=${KIP_POD_CIDR:-$KIP_DEFAULT_POD_CIDR}
 KIP_SERVICE_CIDR=${KIP_SERVICE_CIDR:-$KIP_DEFAULT_SERVICE_CIDR}
+KIP_FLEET_CONTROL=${KIP_FLEET_CONTROL:-0}
 KIP_WORK_DIR=""
 
 kip_ui_init
 kip_cluster_validate_boolean VERBOSE "$KIP_VERBOSE"
+kip_cluster_validate_boolean FLEET_CONTROL "$KIP_FLEET_CONTROL"
 [ "$#" -eq 0 ] || kip_usage_error "cluster-bootstrap does not accept positional arguments."
+if [ "$KIP_FLEET_CONTROL" = 1 ] && [ "${KIP_NODE_IP:-}" = "" ]; then
+    kip_usage_error "Fleet control-plane bootstrap requires the explicit WireGuard NODE_IP."
+fi
 kip_cidr_is_network "$KIP_POD_CIDR" \
     || kip_usage_error "POD_CIDR must be a canonical IPv4 network; received '$KIP_POD_CIDR'."
 kip_cidr_is_network "$KIP_SERVICE_CIDR" \
@@ -51,7 +56,11 @@ trap kip_cleanup EXIT
 trap 'kip_unexpected_error "$?" "$LINENO"' ERR
 
 kip_logo
-kip_heading "Single-Node Kubernetes Bootstrap · v0.1"
+if [ "$KIP_FLEET_CONTROL" = 1 ]; then
+    kip_heading "Fleet Kubernetes Control-Plane Bootstrap · pilot"
+else
+    kip_heading "Single-Node Kubernetes Bootstrap · v0.1"
+fi
 kip_reset_results 12
 
 if kip_cluster_supported_platform && kip_kernel_supported && kip_hostname_valid; then
@@ -170,7 +179,10 @@ else
     exit 1
 fi
 
-if kip_make_single_node_schedulable; then
+if [ "$KIP_FLEET_CONTROL" = 1 ]; then
+    kip_record SKIP "Single-node scheduling" \
+        "Control-plane NoSchedule taint retained until workers join."
+elif kip_make_single_node_schedulable; then
     kip_record PASS "Single-node scheduling" "The control-plane NoSchedule taint is absent."
 else
     kip_record FAIL "Single-node scheduling" "Unable to make the control-plane node schedulable."
@@ -178,19 +190,45 @@ else
     exit 1
 fi
 
-if kip_wait_for_cluster \
-    && kip_component_ready component=kube-apiserver \
-    && kip_component_ready component=etcd \
-    && kip_component_ready component=kube-scheduler \
-    && kip_component_ready component=kube-controller-manager \
-    && kip_component_ready k8s-app=kube-proxy \
-    && kip_component_ready k8s-app=cilium \
-    && kip_component_ready io.cilium/app=operator \
-    && kip_component_ready k8s-app=kube-dns \
-    && kip_all_system_pods_healthy \
-    && kip_run_dns_service_smoke \
-    && kip_run_cilium_connectivity; then
-    kip_record PASS "Cluster health" "Node, core pods, DNS, Services, and Cilium connectivity passed."
+if [ "$KIP_FLEET_CONTROL" = 1 ]; then
+    cluster_healthy=0
+    if kip_exec systemctl is-active --quiet kubelet \
+        && kip_kubectl get --raw=/readyz >/dev/null \
+        && kip_kubectl wait --for=condition=Ready "node/$KIP_NODE_NAME" --timeout=5m >/dev/null \
+        && kip_component_ready component=kube-apiserver \
+        && kip_component_ready component=etcd \
+        && kip_component_ready component=kube-scheduler \
+        && kip_component_ready component=kube-controller-manager \
+        && kip_component_ready k8s-app=kube-proxy \
+        && kip_component_ready k8s-app=cilium \
+        && kip_component_ready io.cilium/app=operator; then
+        cluster_healthy=1
+    fi
+else
+    cluster_healthy=0
+    if kip_wait_for_cluster \
+        && kip_component_ready component=kube-apiserver \
+        && kip_component_ready component=etcd \
+        && kip_component_ready component=kube-scheduler \
+        && kip_component_ready component=kube-controller-manager \
+        && kip_component_ready k8s-app=kube-proxy \
+        && kip_component_ready k8s-app=cilium \
+        && kip_component_ready io.cilium/app=operator \
+        && kip_component_ready k8s-app=kube-dns \
+        && kip_all_system_pods_healthy \
+        && kip_run_dns_service_smoke \
+        && kip_run_cilium_connectivity; then
+        cluster_healthy=1
+    fi
+fi
+if [ "$cluster_healthy" = 1 ]; then
+    if [ "$KIP_FLEET_CONTROL" = 1 ]; then
+        kip_record PASS "Cluster health" \
+            "Control plane, API, kube-proxy, and Cilium are healthy; full fleet DNS/network checks follow worker joins."
+    else
+        kip_record PASS "Cluster health" \
+            "Node, core pods, DNS, Services, and Cilium connectivity passed."
+    fi
 else
     kip_record FAIL "Cluster health" "One or more readiness or connectivity gates failed."
     kip_summary "Cluster bootstrap"
@@ -198,5 +236,10 @@ else
 fi
 
 kip_summary "Cluster bootstrap"
-printf '\n%sNext milestone:%s install and validate the NVIDIA GPU Operator.\n' \
-    "$KIP_COLOR_CYAN" "$KIP_COLOR_RESET"
+if [ "$KIP_FLEET_CONTROL" = 1 ]; then
+    printf '\n%sNext milestone:%s join both GPU workers and run fleet-check.\n' \
+        "$KIP_COLOR_CYAN" "$KIP_COLOR_RESET"
+else
+    printf '\n%sNext milestone:%s install and validate the NVIDIA GPU Operator.\n' \
+        "$KIP_COLOR_CYAN" "$KIP_COLOR_RESET"
+fi

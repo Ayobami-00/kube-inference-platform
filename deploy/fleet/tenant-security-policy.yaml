@@ -1,0 +1,41 @@
+# Attach only after the authorization Pod is Ready. Fail closed if it disappears.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: kip-tenant-auth
+  namespace: kip-inference
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: tenant-auth
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: kip-qwen25-pilot
+  extAuth:
+    failOpen: false
+    statusOnError: 503
+    timeout: 5s
+    headersToExtAuth:
+      - x-llm-d-inference-fairness-id
+      - x-llm-d-inference-objective
+      - x-llm-d-model-name-rewrite
+      - x-llm-d-slo-ttft-ms
+      - x-llm-d-slo-tpot-ms
+      - x-gateway-inference-fairness-id
+      - x-gateway-inference-objective
+      - x-gateway-model-name-rewrite
+      - x-slo-ttft-ms
+      - x-slo-tpot-ms
+      - x-kip-tenant
+      - x-kip-workload-class
+    http:
+      backendRefs:
+        - name: kip-tenant-auth
+          port: 8080
+      pathOverride: /authorize
+      headersToBackend:
+        - x-llm-d-inference-fairness-id
+        - x-llm-d-inference-objective
+        - x-kip-tenant
+        - x-kip-workload-class

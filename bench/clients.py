@@ -133,6 +133,7 @@ class OpenCostClient:
                 "window": _opencost_window(start, end),
                 "aggregate": aggregate,
                 "shareIdle": str(share_idle).lower(),
+                "includeIdle": "true",
                 "idleByNode": "true",
                 "accumulate": "true",
             },

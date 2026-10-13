@@ -1,0 +1,26 @@
+# Reviewed text-trace replay. The JSONL and credential are injected from
+# ignored, root-only files; no real prompt or response is committed.
+schemaVersion: "2.0"
+randomSeed: 42
+benchmark:
+  model: qwen2.5-7b-instruct
+  endpoint:
+    url: ${KIP_PILOT_GATEWAY_URL}/v1/chat/completions
+    type: chat
+    streaming: true
+    timeout: 180.0
+    api_key: ${KIP_PILOT_TOKEN}
+    connectionReuse: sticky-user-sessions
+  dataset:
+    type: file
+    path: ${KIP_PILOT_DATASET}
+    format: ${KIP_PILOT_DATASET_FORMAT}
+    sampling: sequential
+  phases:
+    type: fixed_schedule
+    autoOffset: true
+    concurrency: 16
+  artifacts:
+    dir: ${KIP_PILOT_ARTIFACTS}
+    summary: [json]
+    records: [jsonl]

@@ -1,0 +1,48 @@
+{
+  "aiperfVersion": "0.12.0",
+  "cohorts": [
+    {
+      "arrivalSchedule": "seeded-poisson-v1",
+      "class": "chat",
+      "commands": [
+        "make workload-generate TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=10 SESSIONS=2 RATE=0.2",
+        "make campaign-text-replay TENANT=tenant-a WORKLOAD_CLASS=chat TRIAL=10 RUN_ID=pilot-text-20261013-022534-loss",
+        "make campaign-accounting RUN_ID=pilot-text-20261013-022534-loss TENANT=tenant-a WORKLOAD_CLASS=chat"
+      ],
+      "datasetSha256": "cf04882d021fceaa70db71688f6897d144ed1a48ad4ee7348b5301d844fdf0b8",
+      "offeredSessionsPerSecond": 0.2,
+      "seed": 1476795532089381294,
+      "sessions": 2,
+      "tenant": "tenant-a",
+      "trial": 10
+    }
+  ],
+  "components": {
+    "cilium": "1.20.1",
+    "containerd": "2.3.4",
+    "envoyAiGateway": "v0.7.0",
+    "envoyGateway": "v1.8.1",
+    "eppImage": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0@sha256:9862ae38658824b2560c547237363fe21f269e649b873a4ee84fe3137b554ba9",
+    "gpuOperator": "v26.7.0",
+    "kubernetes": "1.36.4",
+    "llmd": "v0.10.0",
+    "nvidiaDriver": "580.178.04",
+    "vllmImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40"
+  },
+  "costRateSource": "verified whole-node Vast /instances rates; OpenCost shareIdle=true, idleByNode=true",
+  "costWindow": "2026-10-13T02:25:00Z,2026-10-13T02:27:00Z",
+  "gitRevision": "not-recorded-on-git-free-control-checkout",
+  "modelManifestSha256": "8e369d667ed8ff4690dff8845e2f8059dfde949e5c531b3dc3b04356758e555f",
+  "reportCommand": "make campaign-report RUN_ID=pilot-text-20261013-022534-loss SCENARIO=pilot-worker-loss-during",
+  "routerHelmRevisionAtReport": 8,
+  "routerValuesSha256": "e0f286ff950877aedea44081f5389229fa392817f1ea4ee234487a5eeb0d5595",
+  "runId": "pilot-text-20261013-022534-loss",
+  "scenario": {
+    "kind": "replica-failure-checkpoint",
+    "name": "pilot-worker-loss-during",
+    "sha256": "3588a132984d18a0718288b7ad9923ecec88c1072075f756cd2477cf3ab7f973"
+  },
+  "schemaVersion": 1,
+  "versionsLockSha256": "1e9cd50a49745158fea1b6293161f6e3dd3966c3b36f8c49475762238195ddf2",
+  "workloadContractSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}
