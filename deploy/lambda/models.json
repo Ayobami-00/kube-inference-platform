@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "status": "artifact-locked-target-unvalidated",
+  "compatibilityLock": "deploy/fleet/versions.json",
+  "gpuDriverPolicy": {
+    "mode": "preinstalled",
+    "cudaRuntime": "13.0",
+    "minimumDriverMajor": 580,
+    "onMismatch": "stop-before-scaling"
+  },
+  "pools": {
+    "interactive": {
+      "model": "Qwen/Qwen3-8B",
+      "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "servedName": "qwen3-8b",
+      "runtime": "vllm",
+      "dtype": "bfloat16",
+      "maxModelLen": 8192,
+      "replicas": 2,
+      "gpusPerReplica": 1,
+      "tensorParallelSize": 1,
+      "pipelineParallelSize": 1,
+      "expertParallel": false,
+      "speculation": null,
+      "chatTemplateKwargs": {"enable_thinking": false},
+      "workloadClasses": ["chat", "voice"]
+    },
+    "reasoning-batch": {
+      "model": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+      "revision": "9c7f2fbe84465e40164a94cc16cd30b6999b0cc7",
+      "servedName": "qwen3-next-80b-a3b-instruct",
+      "runtime": "vllm",
+      "dtype": "bfloat16",
+      "maxModelLen": 8192,
+      "replicas": 1,
+      "gpusPerReplica": 4,
+      "tensorParallelSize": 4,
+      "pipelineParallelSize": 1,
+      "expertParallel": false,
+      "speculation": null,
+      "workloadClasses": ["agentic-style", "batch"]
+    }
+  },
+  "speech": {
+    "nodeRole": "control-speech",
+    "gpus": 1,
+    "asr": {
+      "model": "nvidia/parakeet-tdt-0.6b-v3",
+      "revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b"
+    },
+    "tts": {
+      "model": "hexgrad/Kokoro-82M",
+      "revision": "f3ff3571791e39611d31c381e3a41a3af07b4987"
+    }
+  },
+  "optionalNvfp4": {
+    "gpu": "B200",
+    "baseModel": "Qwen/Qwen3-8B",
+    "checkpoint": "nvidia/Qwen3-8B-NVFP4",
+    "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+    "sameHardwareBf16Required": true
+  }
+}

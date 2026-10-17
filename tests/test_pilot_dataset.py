@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from bench.errors import ValidationError
-from bench.pilot_dataset import generate_text_dataset, save_generated
+from bench.pilot_dataset import LAMBDA_TOKENIZERS, generate_text_dataset, save_generated
 from bench.workloads import load_workload_contract
 
 
@@ -116,3 +116,32 @@ def test_raw_trace_save_is_private_idempotent_and_refuses_drift(tmp_path: Path) 
     destination.write_text("drift", encoding="utf-8")
     with pytest.raises(ValidationError, match="drift"):
         save_generated(dataset, destination)
+
+
+def test_lambda_trace_records_reviewed_qwen3_tokenizer_revision() -> None:
+    repository, revision = LAMBDA_TOKENIZERS["qwen3-8b"]
+    dataset = generate_text_dataset(
+        load_workload_contract(),
+        tenant="tenant-a",
+        workload_class="chat",
+        trial=1,
+        sessions=2,
+        offered_sessions_per_second=1,
+        count_tokens=count_words,
+        tokenizer_repository=repository,
+        tokenizer_revision=revision,
+    )
+    assert dataset.manifest["tokenizerRepository"] == repository
+    assert dataset.manifest["tokenizerRevision"] == revision
+    with pytest.raises(ValidationError, match="reviewed immutable"):
+        generate_text_dataset(
+            load_workload_contract(),
+            tenant="tenant-a",
+            workload_class="chat",
+            trial=1,
+            sessions=2,
+            offered_sessions_per_second=1,
+            count_tokens=count_words,
+            tokenizer_repository=repository,
+            tokenizer_revision="main",
+        )

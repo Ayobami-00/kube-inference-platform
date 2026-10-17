@@ -1,0 +1,26 @@
+# Short deterministic multi-tenant trace through both private llm-d pools.
+# AIPerf owns generation and timing; credentials and raw packets stay private.
+schemaVersion: "2.0"
+randomSeed: 42
+benchmark:
+  model: ${KIP_LAMBDA_MODEL}
+  endpoint:
+    url: ${KIP_LAMBDA_GATEWAY_URL}/v1/chat/completions
+    type: chat
+    streaming: true
+    timeout: 180.0
+    api_key: ${KIP_LAMBDA_TOKEN}
+    connectionReuse: sticky-user-sessions
+  dataset:
+    type: file
+    path: ${KIP_LAMBDA_DATASET}
+    format: ${KIP_LAMBDA_DATASET_FORMAT}
+    sampling: sequential
+  phases:
+    type: fixed_schedule
+    autoOffset: true
+    concurrency: 16
+  artifacts:
+    dir: ${KIP_LAMBDA_ARTIFACTS}
+    summary: [json]
+    records: [jsonl]

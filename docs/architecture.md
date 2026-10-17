@@ -162,6 +162,63 @@ report was copied locally before the exact task-owned VMs were released; VM-loca
 raw traces and model caches were not retained.
 Nominal nine-cohort trials, voice, and clean rebuild remain acceptance work.
 
+## Lambda two-model campaign (paused after partial validation)
+
+The later Lambda campaign adapted the same private control plane to one A10
+control/speech node and two A100 workers in `us-east-1`: a 1×A100-40 node and
+an 8×A100-80 node. A separate H100 PCIe VM provided a hardware control and was
+released without joining this cluster. Kubernetes 1.36.4, Cilium, and GPU
+Operator advertised whole GPUs on all three nodes. KIP owned two independent
+Qwen3-8B vLLM Deployments (one on each worker) and one TP=4
+Qwen3-Next-80B-A3B-Instruct Deployment on the 8-GPU worker. The large model
+used four GPUs within that node; this was **not** cross-node tensor parallelism.
+
+```mermaid
+flowchart LR
+    Clients[Seeded A/B/C text clients] --> G[Private Envoy AI Gateway]
+    G -.->|authorize; strip spoofed identity/objective headers| A[Fail-closed tenant/class auth]
+    G --> Small[llm-d interactive InferencePool + EPP]
+    G --> Large[llm-d agentic/batch InferencePool + EPP]
+    Small --> S1[Qwen3-8B / A100-40 worker]
+    Small --> S2[Qwen3-8B / A100-80 worker]
+    Large --> L[Qwen3-Next-80B / TP4 on A100-80 worker]
+    S1 --> Telemetry[Prometheus + DCGM + OpenCost]
+    S2 --> Telemetry
+    L --> Telemetry
+    G --> Telemetry
+    Small --> Telemetry
+    Large --> Telemetry
+    Telemetry --> Grafana[Private Grafana]
+    Telemetry --> Reports[Local sanitized paired reports]
+    Ledger[Lambda listed-rate lease ledger] --> Reports
+```
+
+The Gateway supplied the private OpenAI-compatible streaming entry point;
+llm-d's per-model endpoint pickers selected replicas and enforced reviewed
+flow-control bands. A trusted authorization service mapped synthetic tenant
+credentials to class and fairness identity. Client-supplied priority/identity
+headers were rejected or removed, so the client could not grant itself a
+better scheduling class. KIP remained the sole owner of the model Deployments;
+neither llm-d nor Envoy reconciled them. Prometheus scraped gateway, EPP,
+vLLM, GPU, and node metrics; Grafana and the sanitized reports used exact UTC
+windows. OpenCost model attribution was an estimate; the Lambda lease ledger
+provided a listed-rate infrastructure audit, not an invoice.
+
+Three seeded baseline text trials and two matched EPP-flow variants (6 and 8)
+were captured locally. Compared with flow 4, flow 8 reduced mean batch EPP
+queue P95 from 54.76 to 27.47 seconds and mean batch TTFT P95 from 45.91 to
+20.97 seconds. Chat TTFT stayed near 0.2 seconds. This locates the dominant
+observed delay **before** vLLM, at llm-d's large-pool admission queue, rather
+than in token generation. It does not establish a calibrated 70% nominal-load
+SLO result: agentic task completion, batch scheduled-to-completed timing,
+voice, failure tolerance, and advanced optimization levers remain unverified.
+The [flow-8 comparison](../benchmarks/reports/lambda-nominal-paired-comparison-20261013-150136/index.html)
+contains the measured intervals and data-quality caveats.
+The task-owned Lambda VMs were released on 2026-10-13 after the sanitized
+reports were copied and validated locally. This diagram records the validated
+topology, not a currently running cluster. Voice, noisy-tenant and worker-loss
+campaigns, and advanced optimization comparisons await a future fleet.
+
 ## Bootstrap dependency chain
 
 `make bootstrap` preserves the hard checkpoints between layers:

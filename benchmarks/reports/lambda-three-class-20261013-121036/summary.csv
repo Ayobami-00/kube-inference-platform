@@ -1,0 +1,4 @@
+tenant,class,model,scheduledTurns,clientCompleted,ttftP50Ms,ttftP95Ms,tpotP95Ms,e2eP95Ms,outputTokensPerSecond
+tenant-a,chat,qwen3-8b,25,25,88.322,210.924,13.859,3186.078,50.479
+tenant-b,agentic-style,qwen3-next-80b-a3b-instruct,36,36,424.955,1446.756,23.295,5030.202,98.886
+tenant-c,batch,qwen3-next-80b-a3b-instruct,6,6,608.45,1566.265,10.193,9841.68,113.7

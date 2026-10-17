@@ -1,0 +1,48 @@
+{
+  "aiperfVersion": "0.12.0",
+  "costStatus": "listed rate only; no bill or per-request attribution published",
+  "hardware": "1x H100 PCIe 80GB, us-west-3",
+  "listedInstanceUsdPerHour": 3.29,
+  "model": "qwen3-8b",
+  "modelRevision": "b968826d9c46dd6066d109eabc6255188de91218",
+  "promptInputTokensMean": 128,
+  "requestedOutputTokensMean": 64,
+  "rows": [
+    {
+      "completedRequests": 20,
+      "concurrency": 1,
+      "e2eP95Ms": 913.162,
+      "endUtc": "2026-10-13T11:30:33.554707Z",
+      "outputTokensPerRequest": 64.0,
+      "outputTokensPerSecond": 73.409,
+      "startUtc": "2026-10-13T11:30:16.118180Z",
+      "tpotP95Ms": 10.8,
+      "ttftP50Ms": 226.041,
+      "ttftP95Ms": 259.952
+    },
+    {
+      "completedRequests": 20,
+      "concurrency": 4,
+      "e2eP95Ms": 1138.531,
+      "endUtc": "2026-10-13T11:30:46.754611Z",
+      "outputTokensPerRequest": 64.0,
+      "outputTokensPerSecond": 265.307,
+      "startUtc": "2026-10-13T11:30:41.930004Z",
+      "tpotP95Ms": 11.432,
+      "ttftP50Ms": 234.536,
+      "ttftP95Ms": 518.287
+    }
+  ],
+  "runId": "lambda-h100-pcie-control-20261013",
+  "runtimeImage": "docker.io/vllm/vllm-openai:v0.30.0@sha256:5f5e535216848d0c52159c8c13a0af04be5f6fe1a84e79914300610796f76d40",
+  "schemaVersion": 1,
+  "seed": 42,
+  "sloStatus": "inconclusive: one trial and 20 requests per cell",
+  "status": "exploratory-hardware-control",
+  "warnings": [
+    "Exploratory control only: one trial per concurrency; no confidence interval or SLO claim.",
+    "This PCIe H100 is not hardware-matched to the east A100 serving pool.",
+    "No GPU/Prometheus telemetry was captured for this control run.",
+    "Listed hourly price is not a verified invoice or inference allocation."
+  ]
+}

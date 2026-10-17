@@ -36,8 +36,9 @@ DEPLOY_SCRIPTS := $(shell find deploy -type f -name '*.sh' -print | sort)
 	workload-validate workload-preview fleet-compat-check fleet-plan fleet-first-worker-up fleet-control-up \
 	fleet-first-worker-down fleet-check fleet-network-smoke fleet-gpu-install \
 	fleet-certify-control fleet-gpu2-up fleet-gpu2-down fleet-cache-prepare fleet-large-image-pull \
-	fleet-model-install fleet-observability-install fleet-cost-snapshot fleet-cost-install fleet-cost-check campaign-smoke campaign-text-replay campaign-accounting campaign-report workload-generate \
+	fleet-model-install fleet-observability-install fleet-cost-snapshot fleet-cost-install fleet-cost-check campaign-smoke campaign-text-replay campaign-run campaign-compare campaign-accounting campaign-report workload-generate \
 	llmd-install llmd-smoke tenant-install fleet-down \
+	lambda-contract-check lambda-plan lambda-check lambda-join lambda-cost-snapshot lambda-cost-install lambda-cost-check lambda-down \
 	bootstrap destroy
 
 help:
@@ -109,6 +110,16 @@ help:
 	@echo "  llmd-smoke     Smoke the private Gateway (set GATEWAY_URL)"
 	@echo "  tenant-install  Install fail-closed pilot tenant authorization on control VM"
 	@echo "  fleet-down     Release only exact task-owned pilot VMs (CONFIRM_DESTROY=1)"
+	@echo "  lambda-contract-check  Validate reviewed Lambda models/campaign/pins offline"
+	@echo "  lambda-plan    Read-only Lambda capacity and rental prerequisites"
+	@echo "  lambda-check   Inspect exact task-owned Lambda lease state"
+	@echo "  lambda-join ROLE=small-1|large  Join an owned east-region GPU worker"
+	@echo "  lambda-cost-snapshot  Cross-check task-owned Lambda node rates for OpenCost"
+	@echo "  lambda-cost-install  Install pinned OpenCost with copied Lambda price files on control"
+	@echo "  lambda-cost-check  Reconcile OpenCost node assets to Lambda listed rates on control"
+	@echo "  campaign-run SCENARIO=nominal-text VARIANT=baseline|large-flow6|large-flow8 TRIAL=1  Run reviewed Lambda AIPerf text trial on control"
+	@echo "  campaign-compare BASELINE_1=... BASELINE_2=... BASELINE_3=...  Compare three sanitized trials"
+	@echo "  lambda-down CONFIRM_DESTROY=1 RUN_ID=<copied-report>  Release only task-owned Lambda VMs"
 	@echo "  bootstrap      Compose the complete v0.1 platform installation"
 	@echo "  destroy        Remove KIP-managed platform state for a fresh run"
 
@@ -349,6 +360,44 @@ tenant-install:
 fleet-down:
 	@test "$(CONFIRM_DESTROY)" = "1" || { echo 'Set CONFIRM_DESTROY=1' >&2; exit 2; }
 	$(UV) run python -m fleet release-fleet
+
+lambda-contract-check:
+	$(UV) run python -m fleet.lambda_cli contract
+
+lambda-plan:
+	$(UV) run python -m fleet.lambda_cli plan
+
+lambda-check:
+	$(UV) run python -m fleet.lambda_cli check
+
+lambda-join:
+	@case "$(ROLE)" in small-1|large) ;; *) echo 'ROLE must be small-1 or large' >&2; exit 2 ;; esac
+	$(UV) run python -m fleet.lambda_join "$(ROLE)"
+
+lambda-cost-snapshot:
+	$(UV) run python -m fleet.lambda_cost_ledger
+
+lambda-cost-install:
+	@KIP_FLEET_COST_PROVIDER=lambda KIP_VERBOSE="$(VERBOSE)" ./deploy/fleet/cost-install.sh
+
+lambda-cost-check:
+	@python3 deploy/lambda/cost_check.py
+
+campaign-run:
+	@case "$(SCENARIO):$(VARIANT):$(TRIAL)" in \
+		nominal-text:baseline:1|nominal-text:baseline:2|nominal-text:baseline:3|nominal-text:large-flow6:1|nominal-text:large-flow6:2|nominal-text:large-flow6:3|nominal-text:large-flow8:1|nominal-text:large-flow8:2|nominal-text:large-flow8:3) ;; \
+		*) echo 'Only reviewed SCENARIO=nominal-text VARIANT=baseline|large-flow6|large-flow8 TRIAL=1|2|3 is implemented' >&2; exit 2 ;; \
+	esac
+	@$(UV) run --group benchmark --frozen python -m bench.lambda_nominal --trial "$(TRIAL)" --variant "$(VARIANT)"
+
+campaign-compare:
+	@$(UV) run python -m bench.lambda_compare --baseline \
+		"$(BASELINE_1)" "$(BASELINE_2)" "$(BASELINE_3)" \
+		$(if $(CANDIDATE_1),--candidate "$(CANDIDATE_1)" "$(CANDIDATE_2)" "$(CANDIDATE_3)",)
+
+lambda-down:
+	@test "$(CONFIRM_DESTROY)" = "1" || { echo 'Set CONFIRM_DESTROY=1' >&2; exit 2; }
+	@CONFIRM_DESTROY=1 $(UV) run python -m fleet.lambda_down --report "$(RUN_ID)"
 
 bootstrap:
 	@$(MAKE) --no-print-directory host-setup VERBOSE="$(VERBOSE)"

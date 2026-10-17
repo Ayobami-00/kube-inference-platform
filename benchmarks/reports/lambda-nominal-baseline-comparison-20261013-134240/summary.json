@@ -1,0 +1,256 @@
+{
+  "baselineInfrastructureUsd": 12.956445,
+  "baselineRunIds": [
+    "lambda-nominal-baseline-20261013-125717",
+    "lambda-nominal-baseline-20261013-131922",
+    "lambda-nominal-baseline-20261013-133147"
+  ],
+  "campaignSha256": "51786df90dfdf83c1f4877e23e0cbf6ca661b647ac183c23f64329f214c2ffd8",
+  "candidateInfrastructureUsd": null,
+  "candidateRunIds": [],
+  "classes": {
+    "agentic-style": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 7299.843989,
+          "ci95Low": 3410.740678,
+          "coefficientOfVariation": 0.146171,
+          "mean": 5355.292333
+        }
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 85.330453,
+          "ci95Low": 22.508214,
+          "coefficientOfVariation": 0.234511,
+          "mean": 53.919333
+        }
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        }
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 15.458315,
+          "ci95Low": 10.603685,
+          "coefficientOfVariation": 0.074985,
+          "mean": 13.031
+        }
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 4226.572082,
+          "ci95Low": 1106.566585,
+          "coefficientOfVariation": 0.235503,
+          "mean": 2666.569333
+        }
+      }
+    },
+    "batch": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 64824.822674,
+          "ci95Low": 40851.413993,
+          "coefficientOfVariation": 0.091322,
+          "mean": 52838.118333
+        }
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 112.51073,
+          "ci95Low": 104.240604,
+          "coefficientOfVariation": 0.015359,
+          "mean": 108.375667
+        }
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.007525,
+          "ci95Low": 0.979403,
+          "coefficientOfVariation": 0.005698,
+          "mean": 0.993464
+        }
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 12.155599,
+          "ci95Low": 9.785068,
+          "coefficientOfVariation": 0.043493,
+          "mean": 10.970333
+        }
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 51637.58153,
+          "ci95Low": 40174.673136,
+          "coefficientOfVariation": 0.05026,
+          "mean": 45906.127333
+        }
+      }
+    },
+    "chat": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 3296.352708,
+          "ci95Low": 3264.092625,
+          "coefficientOfVariation": 0.00198,
+          "mean": 3280.222667
+        }
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 104.085798,
+          "ci95Low": 56.526202,
+          "coefficientOfVariation": 0.119202,
+          "mean": 80.306
+        }
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        }
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 14.342657,
+          "ci95Low": 13.980677,
+          "coefficientOfVariation": 0.005145,
+          "mean": 14.161667
+        }
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 234.831496,
+          "ci95Low": 187.464504,
+          "coefficientOfVariation": 0.045153,
+          "mean": 211.148
+        }
+      }
+    }
+  },
+  "fleetHourlyUsd": 25.6,
+  "hardwareNodeHourlyUsd": {
+    "kip-lambda-2acad4b0-control-speech": 1.29,
+    "kip-lambda-2acad4b0-large": 22.32,
+    "kip-lambda-2acad4b0-small-1": 1.99
+  },
+  "quality": [
+    "Confidence intervals are Student-t intervals of three trial-level means, not population P95 intervals.",
+    "The offered rate is provisional until mixed-load calibration establishes a sustainable 70% reference.",
+    "Batch within-ten-minute completion and voice SLOs remain unverified by these text reports.",
+    "Tenant costs are estimated attribution; infrastructure totals are rental-rate audits."
+  ],
+  "schemaVersion": 1,
+  "slo": {
+    "agentic-style": {
+      "successRateMin": {
+        "baseline": "pass",
+        "threshold": 0.98
+      },
+      "taskP95Ms": {
+        "baseline": "inconclusive: fewer than 100 tasks per trial",
+        "threshold": 90000
+      },
+      "ttftP95Ms": {
+        "baseline": "fail",
+        "threshold": 2000
+      }
+    },
+    "batch": {
+      "successRateMin": {
+        "baseline": "pass",
+        "threshold": 0.99
+      },
+      "withinMs": {
+        "baseline": "not measured: arrival-to-completion samples unavailable",
+        "threshold": 600000
+      },
+      "withinRateMin": {
+        "baseline": "not measured: arrival-to-completion samples unavailable",
+        "threshold": 0.95
+      }
+    },
+    "chat": {
+      "successRateMin": {
+        "baseline": "pass",
+        "threshold": 0.99
+      },
+      "tpotP95Ms": {
+        "baseline": "pass",
+        "threshold": 100
+      },
+      "ttftP95Ms": {
+        "baseline": "pass",
+        "threshold": 1500
+      }
+    }
+  },
+  "status": "three-trial-baseline",
+  "telemetry": {
+    "largeBatchQueueP95Ms": {
+      "baseline": {
+        "ci95High": 55418.253624,
+        "ci95Low": 54100.83907,
+        "coefficientOfVariation": 0.004842,
+        "mean": 54759.546347
+      }
+    },
+    "largeInteractiveQueueP95Ms": {
+      "baseline": {
+        "ci95High": 3484.926005,
+        "ci95Low": 944.796217,
+        "coefficientOfVariation": 0.230836,
+        "mean": 2214.861111
+      }
+    },
+    "largeNodeGpuUtilMeanPercent": {
+      "baseline": {
+        "ci95High": 29.916791,
+        "ci95Low": 24.796371,
+        "coefficientOfVariation": 0.037674,
+        "mean": 27.356581
+      }
+    },
+    "largeVllmPrefillP95Ms": {
+      "baseline": {
+        "ci95High": 850.249692,
+        "ci95Low": 598.35499,
+        "coefficientOfVariation": 0.069999,
+        "mean": 724.302341
+      }
+    },
+    "largeVllmQueueP95Ms": {
+      "baseline": {
+        "ci95High": 292.168984,
+        "ci95Low": 282.418936,
+        "coefficientOfVariation": 0.006831,
+        "mean": 287.29396
+      }
+    },
+    "largeVllmTtftP95Ms": {
+      "baseline": {
+        "ci95High": 1514.185895,
+        "ci95Low": 209.529834,
+        "coefficientOfVariation": 0.304688,
+        "mean": 861.857864
+      }
+    },
+    "smallInteractiveQueueP95Ms": {
+      "baseline": {
+        "ci95High": 0.096342,
+        "ci95Low": 0.094438,
+        "coefficientOfVariation": 0.004017,
+        "mean": 0.09539
+      }
+    }
+  },
+  "workloadSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

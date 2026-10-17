@@ -1,0 +1,23 @@
+{
+  "dataQuality": [
+    "Prometheus histograms use increase over the whole-second envelope of the request window.",
+    "Endpoint-picker queue P95 includes dispatched requests only; rejections are counted in summary.json.",
+    "Large-node GPU utilization includes all eight GPUs and both co-located model Deployments."
+  ],
+  "metrics": {
+    "largeBatchQueueP95Ms": 29265.306122,
+    "largeInteractiveQueueP95Ms": 1525.0,
+    "largeNodeGpuUtilMeanPercent": 24.546218,
+    "largeVllmPrefillP95Ms": 472.830189,
+    "largeVllmQueueP95Ms": 285.0,
+    "largeVllmTtftP95Ms": 489.46281,
+    "smallInteractiveQueueP95Ms": 0.095
+  },
+  "runId": "lambda-nominal-large-flow6-20261013-141124",
+  "schemaVersion": 1,
+  "trial": 3,
+  "variant": "large-flow6",
+  "windowEndUtc": "2026-10-13T14:21:28Z",
+  "windowPrecisionSeconds": 1,
+  "windowStartUtc": "2026-10-13T14:11:31Z"
+}

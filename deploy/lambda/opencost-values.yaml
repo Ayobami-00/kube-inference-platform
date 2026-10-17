@@ -1,0 +1,31 @@
+# Exact-node CSV prices are generated from the owned Lambda lease and the
+# user-confirmed listed-rate billing contract; no price is committed here.
+kip:
+  pricingState: fleet-csv
+opencost:
+  nodeSelector:
+    kube-inference-platform.io/lambda-role: control-speech
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  exporter:
+    defaultClusterId: kip-lambda
+    securityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    extraEnv:
+      USE_CSV_PROVIDER: "true"
+      CSV_PATH: /etc/kip-fleet-pricing/pricing.csv
+    extraVolumeMounts:
+      - name: kip-fleet-pricing
+        mountPath: /etc/kip-fleet-pricing
+        readOnly: true
+      - name: kip-opencost-config
+        mountPath: /var/configs
+extraVolumes:
+  - name: kip-fleet-pricing
+    configMap:
+      name: kip-fleet-opencost-pricing
+  - name: kip-opencost-config
+    emptyDir: {}

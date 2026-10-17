@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "name": "lambda-v1",
+  "workloadContract": "pilot-v1",
+  "rootSeed": 42,
+  "modelRouting": {
+    "chat": "interactive",
+    "voice": "interactive",
+    "agentic-style": "reasoning-batch",
+    "batch": "reasoning-batch"
+  },
+  "tenantIdentity": "independent-of-model-and-class",
+  "offeredRateFractions": {
+    "nominal": 0.7,
+    "stress": 1.0,
+    "burst": 1.5
+  },
+  "scenarios": {
+    "isolated-chat": {"classes": ["chat"], "minutes": 5, "trials": 3},
+    "isolated-agentic": {"classes": ["agentic-style"], "minutes": 5, "trials": 3},
+    "isolated-batch": {"classes": ["batch"], "minutes": 5, "trials": 3},
+    "isolated-voice": {"classes": ["voice"], "minutes": 5, "trials": 3},
+    "nominal-text": {
+      "classes": ["chat", "agentic-style", "batch"],
+      "minutes": 10,
+      "trials": 3
+    },
+    "nominal-full": {
+      "classes": ["chat", "agentic-style", "batch", "voice"],
+      "minutes": 10,
+      "trials": 3
+    },
+    "stress": {"classes": ["chat", "agentic-style", "batch", "voice"], "minutes": 5, "trials": 1},
+    "burst": {"classes": ["chat", "agentic-style", "batch", "voice"], "minutes": 5, "trials": 1},
+    "noisy-tenant": {
+      "classes": ["chat", "agentic-style", "batch", "voice"],
+      "minutes": 5,
+      "trials": 1
+    },
+    "worker-loss": {
+      "classes": ["chat", "agentic-style", "batch", "voice"],
+      "minutes": 5,
+      "trials": 1
+    }
+  },
+  "warmupMinutes": 2,
+  "cooldownMinutes": 2,
+  "minimumCompletedPerClassPerNominalTrial": 100,
+  "variants": {
+    "baseline": {"pool": "both", "gate": "always"},
+    "mtp": {"pool": "reasoning-batch", "gate": "decode-bottleneck"},
+    "expert-parallel": {"pool": "reasoning-batch", "gate": "moe-bottleneck"},
+    "tp2-pp2": {"pool": "reasoning-batch", "gate": "parallelism-bottleneck"},
+    "prefill-decode": {"pool": "interactive", "gate": "measured-high-speed-fabric"},
+    "nvfp4": {"pool": "interactive", "gate": "same-b200-bf16-control"}
+  }
+}

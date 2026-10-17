@@ -1,0 +1,30 @@
+# CPU-only AIPerf checkpoint through the private, authenticated llm-d Gateway.
+# The caller supplies only reviewed model/tenant/class choices. Credentials,
+# gateway address, and raw artifacts remain in protected node-local storage.
+schemaVersion: "2.0"
+randomSeed: 42
+benchmark:
+  model: ${KIP_LAMBDA_MODEL}
+  endpoint:
+    url: ${KIP_LAMBDA_GATEWAY_URL}/v1/chat/completions
+    type: chat
+    streaming: true
+    timeout: 180.0
+    api_key: ${KIP_LAMBDA_TOKEN}
+  dataset:
+    type: synthetic
+    entries: 24
+    isl: {mean: 128, stddev: 0}
+    osl: {mean: 64, stddev: 0}
+  warmup:
+    type: concurrency
+    requests: 4
+    concurrency: 2
+  profiling:
+    type: concurrency
+    requests: 24
+    concurrency: 4
+  artifacts:
+    dir: ${KIP_LAMBDA_ARTIFACTS}
+    summary: [json]
+    records: [jsonl]

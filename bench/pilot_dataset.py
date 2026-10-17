@@ -59,6 +59,13 @@ SHARED_PREFIX = (
 )
 TOKENIZER_REPOSITORY = "Qwen/Qwen2.5-7B-Instruct"
 TOKENIZER_REVISION = "a09a35458c702b33eeacc393d103063234e8bc28"
+LAMBDA_TOKENIZERS = {
+    "qwen3-8b": ("Qwen/Qwen3-8B", "b968826d9c46dd6066d109eabc6255188de91218"),
+    "qwen3-next-80b-a3b-instruct": (
+        "Qwen/Qwen3-Next-80B-A3B-Instruct",
+        "9c7f2fbe84465e40164a94cc16cd30b6999b0cc7",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -125,6 +132,8 @@ def generate_text_dataset(
     sessions: int,
     offered_sessions_per_second: float,
     count_tokens: Callable[[str], int],
+    tokenizer_repository: str = TOKENIZER_REPOSITORY,
+    tokenizer_revision: str = TOKENIZER_REVISION,
 ) -> GeneratedDataset:
     """Translate reviewed ranges into AIPerf multi/single-turn JSONL records."""
     if tenant not in TENANTS or workload_class not in {"chat", "agentic-style", "batch"}:
@@ -133,6 +142,11 @@ def generate_text_dataset(
         raise ValidationError("pilot sessions must be an integer in [1, 10000]")
     if isinstance(trial, bool) or not isinstance(trial, int) or trial < 1:
         raise ValidationError("pilot trial must be a positive integer")
+    if (tokenizer_repository, tokenizer_revision) not in {
+        (TOKENIZER_REPOSITORY, TOKENIZER_REVISION),
+        *LAMBDA_TOKENIZERS.values(),
+    }:
+        raise ValidationError("tokenizer must be a reviewed immutable model revision")
     seed = derived_seed(contract, tenant, workload_class, trial)
     randomizer = random.Random(seed)
     spec = contract.data["classes"][workload_class]
@@ -227,8 +241,8 @@ def generate_text_dataset(
         "requestedOutputTokensMin": min(output_lengths),
         "requestedOutputTokensMax": max(output_lengths),
         "datasetSha256": hashlib.sha256(jsonl.encode()).hexdigest(),
-        "tokenizerRepository": TOKENIZER_REPOSITORY,
-        "tokenizerRevision": TOKENIZER_REVISION,
+        "tokenizerRepository": tokenizer_repository,
+        "tokenizerRevision": tokenizer_revision,
         "contentPolicy": "synthetic-fixed-lexicon-only",
     }
     return GeneratedDataset(jsonl=jsonl, manifest=manifest)
@@ -261,13 +275,19 @@ def main() -> int:
     parser.add_argument("--trial", required=True, type=int)
     parser.add_argument("--sessions", required=True, type=int)
     parser.add_argument("--rate", required=True, type=float)
+    parser.add_argument("--model", choices=tuple(LAMBDA_TOKENIZERS))
     args = parser.parse_args()
     try:
         from transformers import AutoTokenizer
 
         contract = load_workload_contract()
+        repository, revision = (
+            LAMBDA_TOKENIZERS[args.model]
+            if args.model
+            else (TOKENIZER_REPOSITORY, TOKENIZER_REVISION)
+        )
         tokenizer = AutoTokenizer.from_pretrained(
-            TOKENIZER_REPOSITORY, revision=TOKENIZER_REVISION, trust_remote_code=False
+            repository, revision=revision, trust_remote_code=False
         )
         dataset = generate_text_dataset(
             contract,
@@ -277,18 +297,14 @@ def main() -> int:
             sessions=args.sessions,
             offered_sessions_per_second=args.rate,
             count_tokens=lambda text: len(tokenizer.encode(text, add_special_tokens=False)),
+            tokenizer_repository=repository,
+            tokenizer_revision=revision,
         )
         root = repository_root()
-        destination = (
-            root
-            / "benchmarks"
-            / ".work"
-            / "datasets"
-            / contract.name
-            / args.tenant
-            / args.workload_class
-            / f"trial-{args.trial}.jsonl"
-        )
+        dataset_root = root / "benchmarks/.work/datasets" / contract.name
+        if args.model:
+            dataset_root /= args.model
+        destination = dataset_root / args.tenant / args.workload_class / f"trial-{args.trial}.jsonl"
         save_generated(dataset, destination)
     except (ValidationError, OSError, ValueError) as error:
         print(f"pilot dataset generation failed: {error}", file=sys.stderr)

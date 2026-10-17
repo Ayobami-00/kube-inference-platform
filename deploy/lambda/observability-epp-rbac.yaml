@@ -1,0 +1,47 @@
+# Keep the EPP metrics endpoint authenticated. Its Pods need delegated
+# TokenReview/SubjectAccessReview, while Prometheus gets only GET /metrics.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kip-epp-metrics-reader
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+rules:
+  - nonResourceURLs: [/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kip-fleet-prometheus-epp-metrics
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kip-epp-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: kip-monitoring-prometheus
+    namespace: kip-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kip-epp-auth-delegator
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    app.kubernetes.io/component: observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: kip-qwen3-8b-epp
+    namespace: kip-inference
+  - kind: ServiceAccount
+    name: kip-qwen3-next-epp
+    namespace: kip-inference

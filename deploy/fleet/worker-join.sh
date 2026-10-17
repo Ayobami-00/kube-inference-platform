@@ -23,6 +23,7 @@ source "$KIP_CLUSTER_ROOT/lib/runtime.sh"
 export LC_ALL=C
 KIP_VERBOSE=${KIP_VERBOSE:-0}
 KIP_NODE_IP=${KIP_NODE_IP:-}
+KIP_LAMBDA_CONTROL_IP=${KIP_LAMBDA_CONTROL_IP:-}
 KIP_POD_CIDR=${KIP_POD_CIDR:-$KIP_DEFAULT_POD_CIDR}
 KIP_SERVICE_CIDR=${KIP_SERVICE_CIDR:-$KIP_DEFAULT_SERVICE_CIDR}
 KIP_WORK_DIR=""
@@ -31,6 +32,10 @@ kip_ui_init
 kip_cluster_validate_boolean VERBOSE "$KIP_VERBOSE"
 [ "$#" -eq 0 ] || kip_usage_error "worker-join does not accept positional arguments."
 [ -n "$KIP_NODE_IP" ] || kip_usage_error "worker-join requires the explicit WireGuard NODE_IP."
+if [ -n "$KIP_LAMBDA_CONTROL_IP" ]; then
+    kip_node_ip_is_usable "$KIP_LAMBDA_CONTROL_IP" \
+        || kip_usage_error "KIP_LAMBDA_CONTROL_IP must be a usable IPv4 address."
+fi
 
 KIP_WORK_DIR=$(command mktemp -d "${TMPDIR:-/tmp}/kip-worker.XXXXXX")
 readonly KIP_WORK_DIR
@@ -41,12 +46,12 @@ join_plan="$KIP_WORK_DIR/join-plan.json"
 join_config="$KIP_WORK_DIR/join-config.yaml"
 umask 077
 command cat > "$join_plan"
-if ! jq -e '
+if ! jq -e --arg expected_control "${KIP_LAMBDA_CONTROL_IP:-10.200.0.1}" '
     (keys == ["caHash", "controlIpv4", "schemaVersion", "token"])
     and .schemaVersion == 1
     and (.token | type == "string" and test("^[a-z0-9]{6}\\.[a-z0-9]{16}$"))
     and (.caHash | type == "string" and test("^sha256:[a-f0-9]{64}$"))
-    and (.controlIpv4 == "10.200.0.1")
+    and (.controlIpv4 == $expected_control)
 ' "$join_plan" >/dev/null; then
     kip_usage_error "worker-join requires a reviewed, exact-schema private join plan."
 fi
@@ -64,6 +69,15 @@ if kip_cluster_supported_platform && kip_kernel_supported && kip_hostname_valid;
     case "$KIP_NODE_NAME" in
         kip-gpu-1 | kip-gpu-2 | kip-speech-1)
             kip_record PASS "Supported worker" "$KIP_NODE_NAME on Ubuntu $KIP_OS_VERSION"
+            ;;
+        kip-lambda-*-small-1 | kip-lambda-*-large)
+            if [ -n "$KIP_LAMBDA_CONTROL_IP" ]; then
+                kip_record PASS "Supported worker" "$KIP_NODE_NAME on Ubuntu $KIP_OS_VERSION"
+            else
+                kip_record FAIL "Supported worker" "Lambda names require a private Lambda control IP."
+                kip_summary "Fleet worker join"
+                exit 1
+            fi
             ;;
         *)
             kip_record FAIL "Supported worker" "Set a reviewed, unique fleet hostname first."
@@ -93,15 +107,24 @@ else
     exit 1
 fi
 
-resolved_api=$(kip_exec getent ahostsv4 api.kip.internal 2>/dev/null \
-    | command awk 'NR == 1 {print $1}')
+api_endpoint=api.kip.internal
+if [ -n "$KIP_LAMBDA_CONTROL_IP" ]; then
+    api_endpoint=$control_ip
+    private_path_ok=1
+    kip_exec ip -4 route get "$control_ip" >/dev/null 2>&1 || private_path_ok=0
+else
+    resolved_api=$(kip_exec getent ahostsv4 api.kip.internal 2>/dev/null \
+        | command awk 'NR == 1 {print $1}')
+    private_path_ok=1
+    [ "$resolved_api" = "$control_ip" ] || private_path_ok=0
+    kip_exec ip link show wg-kip >/dev/null 2>&1 || private_path_ok=0
+fi
 if kip_node_ip_is_usable "$KIP_NODE_IP" \
     && kip_node_ip_is_assigned "$KIP_NODE_IP" \
-    && [ "$resolved_api" = "$control_ip" ] \
-    && kip_exec ip link show wg-kip >/dev/null 2>&1 \
+    && [ "$private_path_ok" = 1 ] \
     && kip_exec ping -c 2 -W 2 "$control_ip" >/dev/null 2>&1; then
     KIP_NODE_IP_RESOLVED=$KIP_NODE_IP
-    kip_record PASS "Private API path" "$KIP_NODE_IP → api.kip.internal ($control_ip)"
+    kip_record PASS "Private API path" "$KIP_NODE_IP → $api_endpoint ($control_ip)"
 else
     kip_record FAIL "Private API path" "WireGuard, unique node IP, and private API DNS are required."
     kip_summary "Fleet worker join"
@@ -118,7 +141,7 @@ if [ -e "$KIP_ETC_ROOT/kubernetes/admin.conf" ] \
 fi
 if [ -e "$KIP_ETC_ROOT/kubernetes/kubelet.conf" ]; then
     state=joined
-    if ! command grep -Fq 'server: https://api.kip.internal:6443' \
+    if ! command grep -Fq "server: https://$api_endpoint:6443" \
         "$KIP_ETC_ROOT/kubernetes/kubelet.conf" \
         || ! kip_exec systemctl is-active --quiet kubelet; then
         kip_record FAIL "Join state" "Existing worker is partial or joined to another API."
@@ -161,7 +184,7 @@ apiVersion: kubeadm.k8s.io/v1beta4
 kind: JoinConfiguration
 discovery:
   bootstrapToken:
-    apiServerEndpoint: api.kip.internal:6443
+    apiServerEndpoint: $api_endpoint:6443
     token: "$join_token"
     caCertHashes:
       - "$join_hash"

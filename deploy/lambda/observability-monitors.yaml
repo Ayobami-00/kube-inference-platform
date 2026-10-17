@@ -1,0 +1,96 @@
+# One reviewed selector discovers both KIP-owned model Services across nodes.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-fleet-vllm
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kip-inference]
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: kube-inference-platform
+      app.kubernetes.io/component: llm-runtime
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s
+      honorLabels: true
+      relabelings:
+        - targetLabel: cluster
+          replacement: kip-lambda
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_instance]
+          targetLabel: deployment
+        - sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_model_pool]
+          targetLabel: model_profile
+        - sourceLabels: [__meta_kubernetes_pod_label_kube_inference_platform_io_model_pool]
+          targetLabel: model_name
+        - targetLabel: runtime
+          replacement: vllm
+        - targetLabel: worker_role
+          replacement: combined
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-fleet-epp
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kip-inference]
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [kip-qwen3-8b-epp, kip-qwen3-next-epp]
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabelings:
+        - targetLabel: cluster
+          replacement: kip-lambda
+        - targetLabel: component
+          replacement: llmd-epp
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: pool
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kip-fleet-dcgm
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [gpu-operator]
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
+  endpoints:
+    - port: gpu-metrics
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 3s
+      relabelings:
+        - targetLabel: cluster
+          replacement: kip-lambda
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

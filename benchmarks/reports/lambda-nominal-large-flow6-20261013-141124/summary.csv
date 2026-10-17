@@ -1,0 +1,10 @@
+tenant,class,model,completed,rejected,ttftP95Ms,tpotP95Ms,e2eP95Ms,inputTokens,outputTokens,estimatedAllocatedUsd
+tenant-a,chat,qwen3-8b,80,0,172.948,14.631,3306.821,137186,13727,0.121306
+tenant-a,agentic-style,qwen3-next-80b-a3b-instruct,54,0,1594.82,12.979,4033.902,190472,7495,0.208427
+tenant-a,batch,qwen3-next-80b-a3b-instruct,34,0,27083.93,10.692,34003.219,84807,21452,0.111873
+tenant-b,chat,qwen3-8b,70,0,184.663,14.017,3358.149,110307,11163,0.097639
+tenant-b,agentic-style,qwen3-next-80b-a3b-instruct,44,0,853.49,12.471,3894.195,164946,7190,0.181231
+tenant-b,batch,qwen3-next-80b-a3b-instruct,34,0,27468.769,11.172,33405.227,85107,21219,0.111944
+tenant-c,chat,qwen3-8b,89,0,183.133,13.979,3315.932,157724,14832,0.138702
+tenant-c,agentic-style,qwen3-next-80b-a3b-instruct,49,0,2400.114,10.489,3538.407,175860,8325,0.193917
+tenant-c,batch,qwen3-next-80b-a3b-instruct,34,0,15288.829,10.622,21679.168,81296,22421,0.109197

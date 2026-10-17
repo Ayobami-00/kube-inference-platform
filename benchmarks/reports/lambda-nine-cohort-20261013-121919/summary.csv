@@ -1,0 +1,10 @@
+tenant,class,model,scheduledTurns,clientCompleted,ttftP50Ms,ttftP95Ms,tpotP95Ms,e2eP95Ms,outputTokensPerSecond
+tenant-a,chat,qwen3-8b,10,10,93.266,187.095,13.792,2707.504,26.963
+tenant-a,agentic-style,qwen3-next-80b-a3b-instruct,8,8,552.346,653.473,11.707,4841.387,75.626
+tenant-a,batch,qwen3-next-80b-a3b-instruct,2,2,2626.131,2691.708,9.016,7938.43,48.376
+tenant-b,chat,qwen3-8b,8,8,106.501,147.305,13.456,3120.932,30.327
+tenant-b,agentic-style,qwen3-next-80b-a3b-instruct,15,15,338.001,1111.287,13.236,2812.091,28.09
+tenant-b,batch,qwen3-next-80b-a3b-instruct,2,2,642.367,806.207,9.617,7948.041,62.231
+tenant-c,chat,qwen3-8b,9,9,102.429,226.189,13.484,3146.647,33.171
+tenant-c,agentic-style,qwen3-next-80b-a3b-instruct,11,11,397.98,599.885,14.423,4525.352,27.013
+tenant-c,batch,qwen3-next-80b-a3b-instruct,2,2,3104.771,3248.329,8.427,6617.271,33.133

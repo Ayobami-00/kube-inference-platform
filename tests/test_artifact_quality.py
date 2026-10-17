@@ -163,6 +163,7 @@ def test_publishable_scan_accepts_only_sanitized_report_contract(tmp_path: Path)
         tmp_path / "benchmarks/reports/run/summary.json",
         tmp_path / "benchmarks/reports/run/summary.csv",
         tmp_path / "benchmarks/reports/run/reproducibility.json",
+        tmp_path / "benchmarks/reports/run/telemetry.json",
         tmp_path / "benchmarks/reports/run/charts/latency.svg",
     ]
     for path in allowed:

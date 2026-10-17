@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install pinned OpenCost with exact, heterogeneous, task-owned Vast node rates.
+# Install pinned OpenCost with exact, heterogeneous, task-owned node rates.
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -21,9 +21,24 @@ source "$KIP_CLUSTER_ROOT/lib/kubernetes.sh"
 source "$KIP_OBSERVABILITY_ROOT/lib/common.sh"
 
 export LC_ALL=C
+# Helm and kubectl must target the same owned control-plane API, including
+# when the installer is invoked through sudo without a user's kubeconfig.
+export KUBECONFIG="${KIP_KUBECONFIG:-/etc/kubernetes/admin.conf}"
 KIP_VERBOSE=${KIP_VERBOSE:-0}
-KIP_FLEET_COST_LEDGER=${KIP_FLEET_COST_LEDGER:-$KIP_REPOSITORY_ROOT/fleet/.work/cost-ledger.json}
-KIP_FLEET_COST_CSV=${KIP_FLEET_COST_CSV:-$KIP_REPOSITORY_ROOT/fleet/.work/opencost-pricing.csv}
+KIP_FLEET_COST_PROVIDER=${KIP_FLEET_COST_PROVIDER:-vast}
+case "$KIP_FLEET_COST_PROVIDER" in
+    vast)
+        KIP_FLEET_COST_LEDGER=${KIP_FLEET_COST_LEDGER:-$KIP_REPOSITORY_ROOT/fleet/.work/cost-ledger.json}
+        KIP_FLEET_COST_CSV=${KIP_FLEET_COST_CSV:-$KIP_REPOSITORY_ROOT/fleet/.work/opencost-pricing.csv}
+        KIP_FLEET_COST_VALUES=$SCRIPT_DIR/opencost-values.yaml
+        ;;
+    lambda)
+        KIP_FLEET_COST_LEDGER=${KIP_FLEET_COST_LEDGER:-$KIP_REPOSITORY_ROOT/fleet/.work/lambda-cost-ledger.json}
+        KIP_FLEET_COST_CSV=${KIP_FLEET_COST_CSV:-$KIP_REPOSITORY_ROOT/fleet/.work/lambda-opencost-pricing.csv}
+        KIP_FLEET_COST_VALUES=$KIP_DEPLOY_ROOT/lambda/opencost-values.yaml
+        ;;
+    *) kip_usage_error 'KIP_FLEET_COST_PROVIDER must be vast or lambda.' ;;
+esac
 KIP_WORK_DIR=""
 KIP_PRICING_CHANGED=0
 kip_ui_init
@@ -92,7 +107,7 @@ kip_fleet_cost_release_safe() {
     if kip_exec python3 "$SCRIPT_DIR/helm-values-check.py" \
         "$KIP_OPENCOST_RELEASE" "$KIP_OBSERVABILITY_NAMESPACE" \
         "$KIP_OBSERVABILITY_ROOT/values/opencost-unpriced.yaml" \
-        "$SCRIPT_DIR/opencost-values.yaml"; then
+        "$KIP_FLEET_COST_VALUES"; then
         return 0
     fi
     [ "${1:-}" = allow-legacy ] || return 1
@@ -100,7 +115,12 @@ kip_fleet_cost_release_safe() {
     # CSV and read-only /var/configs revision; any other values drift still fails.
     actual_values_hash=$(printf '%s' "$values" | kip_exec jq -cS -j . \
         | kip_exec sha256sum | command awk '{print $1}') || return 1
-    [ "$actual_values_hash" = 17a3d0bce47a781110ff11da0f44ee8994032d45e43af0ae5ee281baf11707e8 ]
+    case "$actual_values_hash" in
+        17a3d0bce47a781110ff11da0f44ee8994032d45e43af0ae5ee281baf11707e8) return 0 ;;
+        d0acdf795f2ad5bede1daa2ff4a6ea3c31c2b7d21e63e2330f8a59e6d450c35e)
+            [ "$KIP_FLEET_COST_PROVIDER" = lambda ] ;;
+        *) return 1 ;;
+    esac
 }
 
 kip_fleet_cost_apply_pricing() {
@@ -127,7 +147,7 @@ kip_fleet_cost_apply_pricing() {
 kip_logo
 kip_heading "Fleet OpenCost allocation · pilot"
 kip_reset_results 7
-if [ "$(command hostname)" = kip-control ] \
+if { [ "$KIP_FLEET_COST_PROVIDER" = lambda ] || [ "$(command hostname)" = kip-control ]; } \
     && kip_kubectl -n "$KIP_OBSERVABILITY_NAMESPACE" get prometheus \
         kip-monitoring-prometheus >/dev/null 2>&1 \
     && kip_exec helm status "$KIP_MONITORING_RELEASE" \
@@ -139,11 +159,25 @@ else
     kip_summary "Fleet cost installation"
     exit 1
 fi
-if kip_exec python3 -m fleet.cost_ledger --verify-only \
-    --ledger "$KIP_FLEET_COST_LEDGER" --csv "$KIP_FLEET_COST_CSV" >/dev/null; then
-    kip_record PASS "Vast rate evidence" "Fresh exact rates for control and two GPU workers passed."
+if [ "$KIP_FLEET_COST_PROVIDER" = lambda ]; then
+    if kip_exec python3 "$KIP_DEPLOY_ROOT/lambda/verify_pricing.py" \
+        --ledger "$KIP_FLEET_COST_LEDGER" --csv "$KIP_FLEET_COST_CSV" >/dev/null; then
+        pricing_verified=1
+    else
+        pricing_verified=0
+    fi
 else
-    kip_record FAIL "Vast rate evidence" "Refresh the local Vast snapshot and copy both private files."
+    if kip_exec python3 -m fleet.cost_ledger --verify-only \
+        --ledger "$KIP_FLEET_COST_LEDGER" --csv "$KIP_FLEET_COST_CSV" >/dev/null; then
+        pricing_verified=1
+    else
+        pricing_verified=0
+    fi
+fi
+if [ "$pricing_verified" = 1 ]; then
+    kip_record PASS "Rate evidence" "Fresh exact task-owned node rates passed."
+else
+    kip_record FAIL "Rate evidence" "Refresh and copy the private provider rate snapshot."
     kip_summary "Fleet cost installation"
     exit 1
 fi
@@ -171,7 +205,7 @@ else
     exit 1
 fi
 if kip_fleet_cost_apply_pricing && kip_fleet_cost_pricing_safe; then
-    kip_record PASS "Per-node price" "Exact Vast rates mounted through an owned ConfigMap."
+    kip_record PASS "Per-node price" "Exact task-owned rates mounted through an owned ConfigMap."
 else
     kip_record FAIL "Per-node price" "Could not safely configure exact-node CSV pricing."
     kip_summary "Fleet cost installation"
@@ -181,7 +215,7 @@ if kip_exec helm upgrade --install "$KIP_OPENCOST_RELEASE" \
     "$KIP_OPENCOST_CHART@$KIP_OPENCOST_CHART_DIGEST" \
     --namespace "$KIP_OBSERVABILITY_NAMESPACE" \
     --values "$KIP_OBSERVABILITY_ROOT/values/opencost-unpriced.yaml" \
-    --values "$SCRIPT_DIR/opencost-values.yaml" \
+    --values "$KIP_FLEET_COST_VALUES" \
     --wait --timeout 10m; then
     kip_record PASS "OpenCost" "Pinned internal API and inference allocation exporter deployed."
 else

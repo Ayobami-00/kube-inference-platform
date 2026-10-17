@@ -591,7 +591,13 @@ def _validate_report_path(relative: PurePosixPath) -> None:
     tail = parts[3:]
     if len(parts) < 4 or not tail:
         raise ArtifactError(f"{relative}: invalid published benchmark report path")
-    allowed_root = {"index.html", "summary.json", "summary.csv", "reproducibility.json"}
+    allowed_root = {
+        "index.html",
+        "summary.json",
+        "summary.csv",
+        "reproducibility.json",
+        "telemetry.json",
+    }
     if len(tail) == 1 and tail[0] in allowed_root:
         return
     if len(tail) == 2 and tail[0] == "charts" and tail[1].endswith(".svg"):

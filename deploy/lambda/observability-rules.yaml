@@ -1,0 +1,50 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kip-fleet-inference
+  namespace: kip-observability
+  labels:
+    app.kubernetes.io/managed-by: kube-inference-platform
+    release: kip-monitoring
+spec:
+  groups:
+    - name: kip.lambda.serving
+      interval: 15s
+      rules:
+        - record: kip:lambda:nodes_ready
+          expr: kube_node_status_condition{condition="Ready",status="true"}
+          labels:
+            cluster: kip-lambda
+        - record: kip:lambda:replicas_ready
+          expr: kube_deployment_status_replicas_available{namespace="kip-inference",deployment=~"qwen3-8b-small|qwen3-8b-large|qwen3-next-80b"}
+          labels:
+            cluster: kip-lambda
+        - record: kip:lambda:requests_completed_rate5m
+          expr: sum by (cluster,namespace,model_name,deployment,node,pod) (rate(vllm:request_success_total{finished_reason=~"stop|length"}[5m]))
+        - record: kip:lambda:generated_tokens_rate5m
+          expr: sum by (cluster,namespace,model_name,deployment,node,pod) (rate(vllm:generation_tokens_total[5m]))
+        - record: kip:lambda:requests_waiting
+          expr: sum by (cluster,namespace,model_name,deployment,node,pod) (vllm:num_requests_waiting)
+        - record: kip:lambda:kv_cache_utilization_ratio
+          expr: max by (cluster,namespace,model_name,deployment,node,pod) (vllm:kv_cache_usage_perc)
+        - record: kip:lambda:ttft_p95_seconds
+          expr: histogram_quantile(0.95, sum by (le,cluster,namespace,model_name,deployment) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+        - record: kip:lambda:gpu_utilization_ratio
+          expr: DCGM_FI_DEV_GPU_UTIL{exported_namespace="kip-inference"} / 100
+        - record: kip:lambda:gpu_memory_used_mib
+          expr: DCGM_FI_DEV_FB_USED{exported_namespace="kip-inference"}
+        - record: kip:lambda:gpu_power_watts
+          expr: DCGM_FI_DEV_POWER_USAGE{exported_namespace="kip-inference"}
+        - record: kip:lambda:gpu_temperature_celsius
+          expr: DCGM_FI_DEV_GPU_TEMP{exported_namespace="kip-inference"}
+    - name: kip.lambda.routing
+      interval: 15s
+      rules:
+        - record: kip:lambda:tenant_requests_rate5m
+          expr: sum by (cluster,namespace,fairness_id,priority,model_name,pool) (rate(llm_d_epp_request_total[5m]))
+        - record: kip:lambda:flow_outcomes_rate5m
+          expr: sum by (cluster,namespace,inference_pool,outcome,priority) (rate(llm_d_epp_flow_control_requests_total[5m]))
+        - record: kip:lambda:flow_queue_depth
+          expr: sum by (cluster,namespace,inference_pool,model_name,priority,fairness_id) (llm_d_epp_flow_control_queue_size)
+        - record: kip:lambda:ready_endpoints
+          expr: max by (cluster,namespace,inference_pool) (llm_d_epp_ready_endpoints)

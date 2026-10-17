@@ -1,0 +1,999 @@
+{
+  "baselineInfrastructureUsd": 12.956445,
+  "baselineRunIds": [
+    "lambda-nominal-baseline-20261013-125717",
+    "lambda-nominal-baseline-20261013-131922",
+    "lambda-nominal-baseline-20261013-133147"
+  ],
+  "campaignSha256": "51786df90dfdf83c1f4877e23e0cbf6ca661b647ac183c23f64329f214c2ffd8",
+  "candidateInfrastructureUsd": 12.615112,
+  "candidateRunIds": [
+    "lambda-nominal-large-flow8-20261013-142634",
+    "lambda-nominal-large-flow8-20261013-143841",
+    "lambda-nominal-large-flow8-20261013-145051"
+  ],
+  "classes": {
+    "agentic-style": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 7299.843989,
+          "ci95Low": 3410.740678,
+          "coefficientOfVariation": 0.146171,
+          "mean": 5355.292333
+        },
+        "candidate": {
+          "ci95High": 4267.964432,
+          "ci95Low": 3712.042901,
+          "coefficientOfVariation": 0.028044,
+          "mean": 3990.003667
+        },
+        "pairedDelta": {
+          "ci95High": 575.874415,
+          "ci95Low": -3306.451748,
+          "coefficientOfVariation": 0.57235,
+          "mean": -1365.288667
+        },
+        "relativeMeanChangePercent": -25.494
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 85.330453,
+          "ci95Low": 22.508214,
+          "coefficientOfVariation": 0.234511,
+          "mean": 53.919333
+        },
+        "candidate": {
+          "ci95High": 86.894306,
+          "ci95Low": 22.073694,
+          "coefficientOfVariation": 0.239463,
+          "mean": 54.484
+        },
+        "pairedDelta": {
+          "ci95High": 2.338234,
+          "ci95Low": -1.2089,
+          "coefficientOfVariation": 1.264386,
+          "mean": 0.564667
+        },
+        "relativeMeanChangePercent": 1.047
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        },
+        "candidate": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        },
+        "pairedDelta": {
+          "ci95High": 0.0,
+          "ci95Low": 0.0,
+          "coefficientOfVariation": null,
+          "mean": 0.0
+        },
+        "relativeMeanChangePercent": 0.0
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 15.458315,
+          "ci95Low": 10.603685,
+          "coefficientOfVariation": 0.074985,
+          "mean": 13.031
+        },
+        "candidate": {
+          "ci95High": 14.637039,
+          "ci95Low": 9.988961,
+          "coefficientOfVariation": 0.075981,
+          "mean": 12.313
+        },
+        "pairedDelta": {
+          "ci95High": 2.567292,
+          "ci95Low": -4.003292,
+          "coefficientOfVariation": 1.841933,
+          "mean": -0.718
+        },
+        "relativeMeanChangePercent": -5.51
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 4226.572082,
+          "ci95Low": 1106.566585,
+          "coefficientOfVariation": 0.235503,
+          "mean": 2666.569333
+        },
+        "candidate": {
+          "ci95High": 2217.242411,
+          "ci95Low": 305.482255,
+          "coefficientOfVariation": 0.305062,
+          "mean": 1261.362333
+        },
+        "pairedDelta": {
+          "ci95High": 1096.919674,
+          "ci95Low": -3907.333674,
+          "coefficientOfVariation": 0.716792,
+          "mean": -1405.207
+        },
+        "relativeMeanChangePercent": -52.697
+      }
+    },
+    "batch": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 64824.822674,
+          "ci95Low": 40851.413993,
+          "coefficientOfVariation": 0.091322,
+          "mean": 52838.118333
+        },
+        "candidate": {
+          "ci95High": 32201.819346,
+          "ci95Low": 23465.257321,
+          "coefficientOfVariation": 0.063178,
+          "mean": 27833.538333
+        },
+        "pairedDelta": {
+          "ci95High": -9432.500028,
+          "ci95Low": -40576.659972,
+          "coefficientOfVariation": 0.250698,
+          "mean": -25004.58
+        },
+        "relativeMeanChangePercent": -47.323
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 112.51073,
+          "ci95Low": 104.240604,
+          "coefficientOfVariation": 0.015359,
+          "mean": 108.375667
+        },
+        "candidate": {
+          "ci95High": 117.107269,
+          "ci95Low": 107.382065,
+          "coefficientOfVariation": 0.017439,
+          "mean": 112.244667
+        },
+        "pairedDelta": {
+          "ci95High": 5.823877,
+          "ci95Low": 1.914123,
+          "coefficientOfVariation": 0.203397,
+          "mean": 3.869
+        },
+        "relativeMeanChangePercent": 3.57
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.007525,
+          "ci95Low": 0.979403,
+          "coefficientOfVariation": 0.005698,
+          "mean": 0.993464
+        },
+        "candidate": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        },
+        "pairedDelta": {
+          "ci95High": 0.020597,
+          "ci95Low": -0.007525,
+          "coefficientOfVariation": 0.866025,
+          "mean": 0.006536
+        },
+        "relativeMeanChangePercent": 0.658
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 12.155599,
+          "ci95Low": 9.785068,
+          "coefficientOfVariation": 0.043493,
+          "mean": 10.970333
+        },
+        "candidate": {
+          "ci95High": 13.144944,
+          "ci95Low": 10.885056,
+          "coefficientOfVariation": 0.037858,
+          "mean": 12.015
+        },
+        "pairedDelta": {
+          "ci95High": 3.353325,
+          "ci95Low": -1.263992,
+          "coefficientOfVariation": 0.889624,
+          "mean": 1.044667
+        },
+        "relativeMeanChangePercent": 9.523
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 51637.58153,
+          "ci95Low": 40174.673136,
+          "coefficientOfVariation": 0.05026,
+          "mean": 45906.127333
+        },
+        "candidate": {
+          "ci95High": 25316.700352,
+          "ci95Low": 16619.781648,
+          "coefficientOfVariation": 0.083483,
+          "mean": 20968.241
+        },
+        "pairedDelta": {
+          "ci95High": -19812.233679,
+          "ci95Low": -30063.538988,
+          "coefficientOfVariation": 0.08274,
+          "mean": -24937.886333
+        },
+        "relativeMeanChangePercent": -54.324
+      }
+    },
+    "chat": {
+      "e2eP95Ms": {
+        "baseline": {
+          "ci95High": 3296.352708,
+          "ci95Low": 3264.092625,
+          "coefficientOfVariation": 0.00198,
+          "mean": 3280.222667
+        },
+        "candidate": {
+          "ci95High": 3440.244449,
+          "ci95Low": 3298.642884,
+          "coefficientOfVariation": 0.008459,
+          "mean": 3369.443667
+        },
+        "pairedDelta": {
+          "ci95High": 144.160338,
+          "ci95Low": 34.281662,
+          "coefficientOfVariation": 0.24788,
+          "mean": 89.221
+        },
+        "relativeMeanChangePercent": 2.72
+      },
+      "outputTokensPerSecond": {
+        "baseline": {
+          "ci95High": 104.085798,
+          "ci95Low": 56.526202,
+          "coefficientOfVariation": 0.119202,
+          "mean": 80.306
+        },
+        "candidate": {
+          "ci95High": 103.522568,
+          "ci95Low": 56.985432,
+          "coefficientOfVariation": 0.116715,
+          "mean": 80.254
+        },
+        "pairedDelta": {
+          "ci95High": 0.476865,
+          "ci95Low": -0.580865,
+          "coefficientOfVariation": 4.094167,
+          "mean": -0.052
+        },
+        "relativeMeanChangePercent": -0.065
+      },
+      "successRate": {
+        "baseline": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        },
+        "candidate": {
+          "ci95High": 1.0,
+          "ci95Low": 1.0,
+          "coefficientOfVariation": 0.0,
+          "mean": 1.0
+        },
+        "pairedDelta": {
+          "ci95High": 0.0,
+          "ci95Low": 0.0,
+          "coefficientOfVariation": null,
+          "mean": 0.0
+        },
+        "relativeMeanChangePercent": 0.0
+      },
+      "tpotP95Ms": {
+        "baseline": {
+          "ci95High": 14.342657,
+          "ci95Low": 13.980677,
+          "coefficientOfVariation": 0.005145,
+          "mean": 14.161667
+        },
+        "candidate": {
+          "ci95High": 14.598117,
+          "ci95Low": 14.07855,
+          "coefficientOfVariation": 0.007294,
+          "mean": 14.338333
+        },
+        "pairedDelta": {
+          "ci95High": 0.323238,
+          "ci95Low": 0.030096,
+          "coefficientOfVariation": 0.333978,
+          "mean": 0.176667
+        },
+        "relativeMeanChangePercent": 1.247
+      },
+      "ttftP95Ms": {
+        "baseline": {
+          "ci95High": 234.831496,
+          "ci95Low": 187.464504,
+          "coefficientOfVariation": 0.045153,
+          "mean": 211.148
+        },
+        "candidate": {
+          "ci95High": 258.454802,
+          "ci95Low": 177.425864,
+          "coefficientOfVariation": 0.074834,
+          "mean": 217.940333
+        },
+        "pairedDelta": {
+          "ci95High": 38.497318,
+          "ci95Low": -24.912652,
+          "coefficientOfVariation": 1.879026,
+          "mean": 6.792333
+        },
+        "relativeMeanChangePercent": 3.217
+      }
+    }
+  },
+  "economics": {
+    "infrastructureUsdPerSuccess": {
+      "baseline": {
+        "ci95High": 0.009271,
+        "ci95Low": 0.007899,
+        "coefficientOfVariation": 0.03217,
+        "mean": 0.008585
+      },
+      "candidate": {
+        "ci95High": 0.008979,
+        "ci95Low": 0.007717,
+        "coefficientOfVariation": 0.030433,
+        "mean": 0.008348
+      },
+      "pairedDelta": {
+        "ci95High": -0.000151,
+        "ci95Low": -0.000324,
+        "coefficientOfVariation": 0.147195,
+        "mean": -0.000237
+      }
+    },
+    "outputTokensPerUsd": {
+      "baseline": {
+        "ci95High": 32865.799706,
+        "ci95Low": 27959.685615,
+        "coefficientOfVariation": 0.03247,
+        "mean": 30412.742661
+      },
+      "candidate": {
+        "ci95High": 33791.011807,
+        "ci95Low": 28936.488218,
+        "coefficientOfVariation": 0.031154,
+        "mean": 31363.750013
+      },
+      "pairedDelta": {
+        "ci95High": 1306.442767,
+        "ci95Low": 595.571937,
+        "coefficientOfVariation": 0.150453,
+        "mean": 951.007352
+      }
+    },
+    "outputUsdPerMillion": {
+      "baseline": {
+        "ci95High": 35.562115,
+        "ci95Low": 30.246108,
+        "coefficientOfVariation": 0.032518,
+        "mean": 32.904112
+      },
+      "candidate": {
+        "ci95High": 34.395853,
+        "ci95Low": 29.413681,
+        "coefficientOfVariation": 0.031431,
+        "mean": 31.904767
+      },
+      "pairedDelta": {
+        "ci95High": -0.596846,
+        "ci95Low": -1.401843,
+        "coefficientOfVariation": 0.162134,
+        "mean": -0.999344
+      }
+    }
+  },
+  "fleetHourlyUsd": 25.6,
+  "hardwareNodeHourlyUsd": {
+    "kip-lambda-2acad4b0-control-speech": 1.29,
+    "kip-lambda-2acad4b0-large": 22.32,
+    "kip-lambda-2acad4b0-small-1": 1.99
+  },
+  "quality": [
+    "Confidence intervals are Student-t intervals of three trial-level means, not population P95 intervals.",
+    "The offered rate is provisional until mixed-load calibration establishes a sustainable 70% reference.",
+    "Batch within-ten-minute completion and voice SLOs remain unverified by these text reports.",
+    "Tenant costs are estimated attribution; infrastructure totals are rental-rate audits.",
+    "Per-tenant prompt lengths differ by seed; tenant latency differences are not pure scheduler fairness.",
+    "llm-d queue P95 covers dispatched requests in a priority band before vLLM; vLLM queue P95 covers model requests after dispatch. Histogram percentiles are approximate and cannot be subtracted or added.",
+    "Earlier baseline trial reports predate recording the endpoint-picker values hash; the reviewed baseline release was checked before trial 3."
+  ],
+  "schemaVersion": 1,
+  "slo": {
+    "agentic-style": {
+      "successRateMin": {
+        "baseline": "pass",
+        "candidate": "pass",
+        "threshold": 0.98
+      },
+      "taskP95Ms": {
+        "baseline": "inconclusive: fewer than 100 tasks per trial",
+        "candidate": "inconclusive: fewer than 100 tasks per trial",
+        "threshold": 90000
+      },
+      "ttftP95Ms": {
+        "baseline": "fail",
+        "candidate": "pass",
+        "threshold": 2000
+      }
+    },
+    "batch": {
+      "successRateMin": {
+        "baseline": "pass",
+        "candidate": "pass",
+        "threshold": 0.99
+      },
+      "withinMs": {
+        "baseline": "not measured: arrival-to-completion samples unavailable",
+        "candidate": "not measured: arrival-to-completion samples unavailable",
+        "threshold": 600000
+      },
+      "withinRateMin": {
+        "baseline": "not measured: arrival-to-completion samples unavailable",
+        "candidate": "not measured: arrival-to-completion samples unavailable",
+        "threshold": 0.95
+      }
+    },
+    "chat": {
+      "successRateMin": {
+        "baseline": "pass",
+        "candidate": "pass",
+        "threshold": 0.99
+      },
+      "tpotP95Ms": {
+        "baseline": "pass",
+        "candidate": "pass",
+        "threshold": 100
+      },
+      "ttftP95Ms": {
+        "baseline": "pass",
+        "candidate": "pass",
+        "threshold": 1500
+      }
+    }
+  },
+  "status": "paired-comparison",
+  "telemetry": {
+    "largeBatchQueueP95Ms": {
+      "baseline": {
+        "ci95High": 55418.253624,
+        "ci95Low": 54100.83907,
+        "coefficientOfVariation": 0.004842,
+        "mean": 54759.546347
+      },
+      "candidate": {
+        "ci95High": 27902.953504,
+        "ci95Low": 27033.882983,
+        "coefficientOfVariation": 0.006368,
+        "mean": 27468.418244
+      },
+      "pairedDelta": {
+        "ci95High": -26377.287604,
+        "ci95Low": -28204.968603,
+        "coefficientOfVariation": 0.013479,
+        "mean": -27291.128103
+      }
+    },
+    "largeInteractiveQueueP95Ms": {
+      "baseline": {
+        "ci95High": 3484.926005,
+        "ci95Low": 944.796217,
+        "coefficientOfVariation": 0.230836,
+        "mean": 2214.861111
+      },
+      "candidate": {
+        "ci95High": 1833.444311,
+        "ci95Low": 80.841403,
+        "coefficientOfVariation": 0.368554,
+        "mean": 957.142857
+      },
+      "pairedDelta": {
+        "ci95High": 707.155143,
+        "ci95Low": -3222.591651,
+        "coefficientOfVariation": 0.628891,
+        "mean": -1257.718254
+      }
+    },
+    "largeNodeGpuUtilMeanPercent": {
+      "baseline": {
+        "ci95High": 29.916791,
+        "ci95Low": 24.796371,
+        "coefficientOfVariation": 0.037674,
+        "mean": 27.356581
+      },
+      "candidate": {
+        "ci95High": 28.655073,
+        "ci95Low": 16.735487,
+        "coefficientOfVariation": 0.105711,
+        "mean": 22.69528
+      },
+      "pairedDelta": {
+        "ci95High": 1.167499,
+        "ci95Low": -10.490101,
+        "coefficientOfVariation": 0.50338,
+        "mean": -4.661301
+      }
+    },
+    "largeVllmPrefillP95Ms": {
+      "baseline": {
+        "ci95High": 850.249692,
+        "ci95Low": 598.35499,
+        "coefficientOfVariation": 0.069999,
+        "mean": 724.302341
+      },
+      "candidate": {
+        "ci95High": 495.689239,
+        "ci95Low": 457.486447,
+        "coefficientOfVariation": 0.016134,
+        "mean": 476.587843
+      },
+      "pairedDelta": {
+        "ci95High": -126.048101,
+        "ci95Low": -369.380895,
+        "coefficientOfVariation": 0.197717,
+        "mean": -247.714498
+      }
+    },
+    "largeVllmQueueP95Ms": {
+      "baseline": {
+        "ci95High": 292.168984,
+        "ci95Low": 282.418936,
+        "coefficientOfVariation": 0.006831,
+        "mean": 287.29396
+      },
+      "candidate": {
+        "ci95High": 299.303296,
+        "ci95Low": 288.856942,
+        "coefficientOfVariation": 0.00715,
+        "mean": 294.080119
+      },
+      "pairedDelta": {
+        "ci95High": 16.741726,
+        "ci95Low": -3.169407,
+        "coefficientOfVariation": 0.590563,
+        "mean": 6.786159
+      }
+    },
+    "largeVllmTtftP95Ms": {
+      "baseline": {
+        "ci95High": 1514.185895,
+        "ci95Low": 209.529834,
+        "coefficientOfVariation": 0.304688,
+        "mean": 861.857864
+      },
+      "candidate": {
+        "ci95High": 720.59087,
+        "ci95Low": 490.072541,
+        "coefficientOfVariation": 0.076649,
+        "mean": 605.331705
+      },
+      "pairedDelta": {
+        "ci95High": 511.055595,
+        "ci95Low": -1024.107913,
+        "coefficientOfVariation": 1.204529,
+        "mean": -256.526159
+      }
+    },
+    "smallInteractiveQueueP95Ms": {
+      "baseline": {
+        "ci95High": 0.096342,
+        "ci95Low": 0.094438,
+        "coefficientOfVariation": 0.004017,
+        "mean": 0.09539
+      },
+      "candidate": {
+        "ci95High": 0.095,
+        "ci95Low": 0.095,
+        "coefficientOfVariation": 0.0,
+        "mean": 0.095
+      },
+      "pairedDelta": {
+        "ci95High": 0.000562,
+        "ci95Low": -0.001342,
+        "coefficientOfVariation": 0.982543,
+        "mean": -0.00039
+      }
+    }
+  },
+  "tenantClasses": {
+    "tenant-a": {
+      "agentic-style": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 4317.20032,
+            "ci95Low": 1263.13168,
+            "coefficientOfVariation": 0.220315,
+            "mean": 2790.166
+          },
+          "candidate": {
+            "ci95High": 2841.959883,
+            "ci95Low": -417.477216,
+            "coefficientOfVariation": 0.541188,
+            "mean": 1212.241333
+          },
+          "pairedDelta": {
+            "ci95High": 804.336658,
+            "ci95Low": -3960.185992,
+            "coefficientOfVariation": 0.607753,
+            "mean": -1577.924667
+          }
+        }
+      },
+      "batch": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.032379,
+            "ci95Low": 0.948013,
+            "coefficientOfVariation": 0.017149,
+            "mean": 0.990196
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.051987,
+            "ci95Low": -0.032379,
+            "coefficientOfVariation": 1.732051,
+            "mean": 0.009804
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 48987.146967,
+            "ci95Low": 37190.164366,
+            "coefficientOfVariation": 0.055106,
+            "mean": 43088.655667
+          },
+          "candidate": {
+            "ci95High": 29600.829499,
+            "ci95Low": -1647.130166,
+            "coefficientOfVariation": 0.449994,
+            "mean": 13976.849667
+          },
+          "pairedDelta": {
+            "ci95High": -7655.95664,
+            "ci95Low": -50567.65536,
+            "coefficientOfVariation": 0.296689,
+            "mean": -29111.806
+          }
+        }
+      },
+      "chat": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 242.509719,
+            "ci95Low": 172.861615,
+            "coefficientOfVariation": 0.067499,
+            "mean": 207.685667
+          },
+          "candidate": {
+            "ci95High": 282.067158,
+            "ci95Low": 156.494842,
+            "coefficientOfVariation": 0.115262,
+            "mean": 219.281
+          },
+          "pairedDelta": {
+            "ci95High": 82.489692,
+            "ci95Low": -59.299025,
+            "coefficientOfVariation": 2.461233,
+            "mean": 11.595333
+          }
+        }
+      }
+    },
+    "tenant-b": {
+      "agentic-style": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 5042.35394,
+            "ci95Low": -156.33194,
+            "coefficientOfVariation": 0.428314,
+            "mean": 2443.011
+          },
+          "candidate": {
+            "ci95High": 2525.386487,
+            "ci95Low": -58.443153,
+            "coefficientOfVariation": 0.421628,
+            "mean": 1233.471667
+          },
+          "pairedDelta": {
+            "ci95High": 2672.276308,
+            "ci95Low": -5091.354974,
+            "coefficientOfVariation": 1.291931,
+            "mean": -1209.539333
+          }
+        }
+      },
+      "batch": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 55598.920861,
+            "ci95Low": 36737.629139,
+            "coefficientOfVariation": 0.082228,
+            "mean": 46168.275
+          },
+          "candidate": {
+            "ci95High": 26681.652854,
+            "ci95Low": 17789.880479,
+            "coefficientOfVariation": 0.080488,
+            "mean": 22235.766667
+          },
+          "pairedDelta": {
+            "ci95High": -10476.490165,
+            "ci95Low": -37388.526501,
+            "coefficientOfVariation": 0.226336,
+            "mean": -23932.508333
+          }
+        }
+      },
+      "chat": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 245.251548,
+            "ci95Low": 163.958452,
+            "coefficientOfVariation": 0.079971,
+            "mean": 204.605
+          },
+          "candidate": {
+            "ci95High": 285.043304,
+            "ci95Low": 126.858696,
+            "coefficientOfVariation": 0.154595,
+            "mean": 205.951
+          },
+          "pairedDelta": {
+            "ci95High": 40.372956,
+            "ci95Low": -37.680956,
+            "coefficientOfVariation": 11.671964,
+            "mean": 1.346
+          }
+        }
+      }
+    },
+    "tenant-c": {
+      "agentic-style": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 3020.593912,
+            "ci95Low": 840.516755,
+            "coefficientOfVariation": 0.227292,
+            "mean": 1930.555333
+          },
+          "candidate": {
+            "ci95High": 1898.845541,
+            "ci95Low": 53.444459,
+            "coefficientOfVariation": 0.380514,
+            "mean": 976.145
+          },
+          "pairedDelta": {
+            "ci95High": -598.145707,
+            "ci95Low": -1310.67496,
+            "coefficientOfVariation": 0.150266,
+            "mean": -954.410333
+          }
+        }
+      },
+      "batch": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.032379,
+            "ci95Low": 0.948013,
+            "coefficientOfVariation": 0.017149,
+            "mean": 0.990196
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.051987,
+            "ci95Low": -0.032379,
+            "coefficientOfVariation": 1.732051,
+            "mean": 0.009804
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 62499.599385,
+            "ci95Low": 22416.357948,
+            "coefficientOfVariation": 0.190019,
+            "mean": 42457.978667
+          },
+          "candidate": {
+            "ci95High": 40879.487102,
+            "ci95Low": -5586.668435,
+            "coefficientOfVariation": 0.529999,
+            "mean": 17646.409333
+          },
+          "pairedDelta": {
+            "ci95High": 9687.873928,
+            "ci95Low": -59311.012595,
+            "coefficientOfVariation": 0.559735,
+            "mean": -24811.569333
+          }
+        }
+      },
+      "chat": {
+        "successRate": {
+          "baseline": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "candidate": {
+            "ci95High": 1.0,
+            "ci95Low": 1.0,
+            "coefficientOfVariation": 0.0,
+            "mean": 1.0
+          },
+          "pairedDelta": {
+            "ci95High": 0.0,
+            "ci95Low": 0.0,
+            "coefficientOfVariation": null,
+            "mean": 0.0
+          }
+        },
+        "ttftP95Ms": {
+          "baseline": {
+            "ci95High": 229.465676,
+            "ci95Low": 181.982991,
+            "coefficientOfVariation": 0.046456,
+            "mean": 205.724333
+          },
+          "candidate": {
+            "ci95High": 258.159644,
+            "ci95Low": 168.436356,
+            "coefficientOfVariation": 0.084667,
+            "mean": 213.298
+          },
+          "pairedDelta": {
+            "ci95High": 53.322459,
+            "ci95Low": -38.175126,
+            "coefficientOfVariation": 2.431632,
+            "mean": 7.573667
+          }
+        }
+      }
+    }
+  },
+  "workloadSha256": "0586adb4c231c273c5ac6ed012e8e0fb962addabcc431e836c150ce274cd8837"
+}

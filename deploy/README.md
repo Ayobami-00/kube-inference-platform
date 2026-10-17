@@ -1,7 +1,7 @@
 # Deployment Assets
 
 This directory contains the declarative assets required for the v0.1 vertical slice.
-Operational commands and their verified order remain in the repository's root `README.md`.
+Operational commands and their verified order remain in the root `PLATFORM_GUIDE.md`.
 
 | Directory | Responsibility | Completion gate |
 | --- | --- | --- |
@@ -10,7 +10,8 @@ Operational commands and their verified order remain in the repository's root `R
 | `gpu/` | Pinned GPU Operator install, read-only validation, CUDA smoke test, and the Operator-owned DCGM configuration | A whole-GPU Pod can consume `nvidia.com/gpu` and run `nvidia-smi`; DCGM remains deferred until observability |
 | `runtime/` | Stable runtime dispatcher, committed profiles, and the vLLM adapter | Health, model discovery, non-streaming generation, and incremental SSE pass |
 | `observability/` | Prometheus/Grafana/Alertmanager, ownership-safe DCGM enablement and discovery, OpenCost, stable recording rules, dashboards, and alerts | Runtime, GPU, platform, energy, and cost metrics are queryable |
-| `fleet/` | Separate immutable artifact lock for the proposed three-node llm-d pilot | Compatibility and live GPU/network gates remain unvalidated |
+| `fleet/` | Immutable artifact lock and target-local tooling for the separate three-node llm-d pilot | Pilot GPU/network and request-path checkpoints validated; full SLO campaign remains open |
+| `lambda/` | Reviewed Lambda model pools, private llm-d/Gateway path, trusted tenants, and proposed speech revisions | Two-model text serving and matched routing trials validated; voice and advanced model optimizations remain open |
 
 Benchmark orchestration lives under `bench/` and `benchmarks/` because it is a platform
 capability rather than another long-running serving layer. Its installation owns the
